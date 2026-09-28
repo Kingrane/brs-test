@@ -1,10 +1,15 @@
+// C# backend on Render (branch csharp-backend, folder backend/).
+// Previously these paths were relative: dev went through the vite proxy to
+// localhost:3000, production to the Vercel serverless functions in api/.
+const API_BASE = "https://brs-test.onrender.com"
+
 export const ENDPOINTS = {
-    semesters: "/api/student/semester_list",
-    index: "/api/student/index",
-    journal: "/api/student/discipline/journal",
-    subject: "/api/student/discipline/subject",
-    events: "/api/student/discipline/events",
-    globalEvents: "/api/student/events",
+    semesters: `${API_BASE}/api/student/semester_list`,
+    index: `${API_BASE}/api/student/index`,
+    journal: `${API_BASE}/api/student/discipline/journal`,
+    subject: `${API_BASE}/api/student/discipline/subject`,
+    events: `${API_BASE}/api/student/discipline/events`,
+    globalEvents: `${API_BASE}/api/student/events`,
 }
 
 export function buildQuery(params) {
