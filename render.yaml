@@ -1,0 +1,13 @@
+services:
+  # .NET is not one of Render's native runtimes, so the backend ships as a Docker
+  # image - Render builds it from backend/Dockerfile.
+  - type: web
+    name: brs-backend
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
