@@ -39,7 +39,7 @@ dotnet run
 
 | Имя | По умолчанию | Что делает |
 |---|---|---|
-| `PORT` | нет → `localhost:5000` | Порт прослушивания. Render задаёт его сам, тогда сервер слушает `0.0.0.0:$PORT`. |
+| `PORT` | `8080` в контейнере, иначе `localhost:5000` | Порт прослушивания. Render подставляет свой. |
 | `GRADE_INSECURE_TLS` | `false` | `1`/`true` — принимать любой TLS-сертификат от `grade.sfedu.ru`. |
 
 `GRADE_INSECURE_TLS` — эквивалент `rejectUnauthorized: false` из `_gradeFetch.js`. **Выключен**, потому что
@@ -48,20 +48,39 @@ dotnet run
 
 ## Деплой на Render
 
-Blueprint лежит в `backend/render.yaml` — Root Directory `backend`, build `dotnet publish BrsBackend.csproj -c Release -o ./out`,
-start `./out/BrsBackend`, health check `/api/health`. Можно задеплоить по кнопке через Blueprint, либо руками:
+**Render не поддерживает .NET нативно** — его рантаймы это Node.js/Bun, Python, Ruby, Go, Rust, Elixir.
+Поэтому бэкенд едет как Docker-образ: `Dockerfile` публикует проект под `linux-x64` и запускает его
+на `aspnet:10.0`. Render такие образы собирает и запускает штатно.
 
-1. New → Web Service, подключить репозиторий
-2. Root Directory: `backend`
-3. Build Command: `dotnet publish BrsBackend.csproj -c Release -o ./out`
-4. Start Command: `./out/BrsBackend`
-5. Health Check Path: `/api/health`
+Blueprint лежит в корне репо — `render.yaml` (Render ищет его именно там, не в `backend/`):
 
-`PORT` подставит Render сам, перенастраивать ничего не нужно. После деплоя открой `https://<адрес>/` —
-это та же страница проверки.
+```yaml
+services:
+  - type: web
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+```
+
+Либо вручную: New → Web Service → **Runtime: Docker** → Root Directory `backend` → Dockerfile Path `./Dockerfile`
+→ Health Check Path `/api/health`. Build/Start Command оставляем пустыми, их задаёт сам Dockerfile.
+
+`PORT` Render подставляет сам, приложение слушает `0.0.0.0:$PORT`. После деплоя открой `https://<адрес>/` —
+это страница проверки.
 
 Чтобы фронтенд (`src/api/client.js`) смотрел в этот адрес, а не в относительные `/api/...`, нужно добавить
 базовый URL в константу `ENDPOINTS` — пути в таблице выше менять не придётся, они совпадают один в один.
+
+### Проверка сборки без Docker
+
+Docker локально может не быть, а проверить самое рискованное (RID) можно и так:
+
+```powershell
+dotnet publish BrsBackend.csproj -c Release -r linux-x64 --self-contained false -o ./out-linux
+```
+
+В `out-linux` должен появиться `BrsBackend` **без** `.exe` — это linux-apphost, который запускает `CMD` в Dockerfile.
 
 ## Что стоит учесть
 

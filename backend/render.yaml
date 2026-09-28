@@ -1,9 +1,0 @@
-services:
-  - type: web
-    name: brs-backend
-    runtime: dotnet
-    plan: free
-    rootDir: backend
-    buildCommand: dotnet publish BrsBackend.csproj -c Release -o ./out
-    startCommand: ./out/BrsBackend
-    healthCheckPath: /api/health
