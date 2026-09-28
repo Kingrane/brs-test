@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BRS backend — проверка</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #14161a;
+      --panel: #1c1f26;
+      --line: #2b303b;
+      --text: #e6e8ec;
+      --muted: #8b93a1;
+      --accent: #5b8cff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 32px 20px 64px;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+
+    main { max-width: 900px; margin: 0 auto; }
+
+    h1 { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+    p.sub { margin: 0 0 28px; color: var(--muted); }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+
+    label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+
+    input {
+      width: 100%;
+      padding: 9px 11px;
+      background: #12141a;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: 13px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+
+    input:focus { outline: none; border-color: var(--accent); }
+
+    .buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    button {
+      padding: 9px 14px;
+      background: #262b35;
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: 13px inherit;
+      cursor: pointer;
+    }
+
+    button:hover:not(:disabled) { border-color: var(--accent); }
+    button:disabled { opacity: .5; cursor: progress; }
+
+    .status { margin: 0 0 12px; font-size: 13px; color: var(--muted); word-break: break-all; }
+    .status b { color: var(--text); font-weight: 600; }
+
+    pre {
+      margin: 0;
+      padding: 14px;
+      max-height: 460px;
+      overflow: auto;
+      background: #0e1014;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: 12px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .hint { margin: 14px 0 0; font-size: 12px; color: var(--muted); }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>BRS backend — проверка</h1>
+    <p class="sub">Прокси к grade.sfedu.ru. Вставь токен и нажми эндпоинт.</p>
+
+    <section>
+      <h2>Параметры</h2>
+      <div class="grid">
+        <div>
+          <label for="token">token (обязательно, от 16 символов)</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false">
+        </div>
+        <div>
+          <label for="semester">SemesterID (необязательно)</label>
+          <input id="semester" spellcheck="false">
+        </div>
+        <div>
+          <label for="id">id (для journal / subject / events)</label>
+          <input id="id" spellcheck="false">
+        </div>
+        <div>
+          <label for="recordbook">recordbookID (для events)</label>
+          <input id="recordbook" spellcheck="false">
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Запрос</h2>
+      <div class="buttons">
+        <button data-path="/api/health">health</button>
+        <button data-path="/api/student/semester_list">semester_list</button>
+        <button data-path="/api/student/index">index</button>
+        <button data-path="/api/student/discipline/journal">journal</button>
+        <button data-path="/api/student/discipline/subject">subject</button>
+        <button data-path="/api/student/discipline/events">events</button>
+        <button data-path="/api/student/events">globalEvents</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Ответ</h2>
+      <p class="status" id="status">Нажми кнопку, чтобы выполнить запрос.</p>
+      <pre id="output">—</pre>
+      <p class="hint">Токен уходит в query-параметре — так устроен сам grade.sfedu.ru. Не вставляй его в публичные ссылки.</p>
+    </section>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id)
+    const fields = ['token', 'semester', 'id', 'recordbook']
+    const paramsFor = (path) => {
+      const qs = new URLSearchParams()
+      const token = $('token').value.trim()
+      if (path !== '/api/health' && token) qs.set('token', token)
+
+      if (path.endsWith('/index') && $('semester').value.trim()) qs.set('SemesterID', $('semester').value.trim())
+      if (/\/(journal|subject|events)$/.test(path) && $('id').value.trim()) qs.set('id', $('id').value.trim())
+      if (path.endsWith('/events') && $('recordbook').value.trim()) qs.set('recordbookID', $('recordbook').value.trim())
+      if (path.endsWith('/events') && $('semester').value.trim()) qs.set('semesterID', $('semester').value.trim())
+
+      return qs.toString()
+    }
+
+    const show = (status, body) => {
+      $('status').innerHTML = status
+      $('output').textContent = body
+    }
+
+    document.querySelectorAll('button[data-path]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const path = button.dataset.path
+        const qs = paramsFor(path)
+        const url = path + (qs ? '?' + qs : '')
+
+        document.querySelectorAll('button').forEach((b) => (b.disabled = true))
+        show(`<b>GET</b> ${path}`, '…')
+
+        try {
+          const res = await fetch(url)
+          const text = await res.text()
+          let pretty = text
+          try { pretty = JSON.stringify(JSON.parse(text), null, 2) } catch {}
+          show(`<b>${res.status}</b> ${res.statusText} · ${path}`, pretty || '(пусто)')
+        } catch (err) {
+          show(`<b>ошибка сети</b> · ${path}`, String(err))
+        } finally {
+          document.querySelectorAll('button').forEach((b) => (b.disabled = false))
+        }
+      })
+    })
+
+    // Токен не должен лежать в localStorage — восстанавливаем только из URL (?token=)
+    const fromUrl = new URLSearchParams(location.search).get('token')
+    if (fromUrl) $('token').value = fromUrl
+    fields.forEach((id) => $('id').addEventListener('keydown', (e) => e.key === 'Enter' && $('output').focus()))
+  </script>
+</body>
+
+</html>
