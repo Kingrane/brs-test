@@ -102,7 +102,7 @@ export default function ModuleCardList({ subjectInfo, disciplineMap, submodules 
                     })
 
                 return (
-                    <section className="group" key={`${idx}-${module.Title || "module"}`}>
+                    <section className="group" key={`${idx}-${module.Title || "module"}`} style={{ "--reveal-order": Math.min(idx, 4) }}>
                         <h4 className="group__title">{module.Title || "Модуль"}</h4>
                         {rows.length > 0
                             ? renderRows(rows)

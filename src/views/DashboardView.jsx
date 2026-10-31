@@ -9,6 +9,7 @@ import EventsTable from "../components/EventsTable"
 import ModuleCardList from "../components/ModuleCardList"
 import ScheduleView from "../components/ScheduleView"
 import TodayCard from "../components/TodayCard"
+import SlidingCapsule from "../components/SlidingCapsule"
 import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
 
 const MAIN_NAV = [
@@ -86,7 +87,7 @@ export default function DashboardView({
         event.preventDefault()
         const next = event.key === "Home" ? 0 : event.key === "End" ? DISCIPLINE_TABS.length - 1 : (index + offset + DISCIPLINE_TABS.length) % DISCIPLINE_TABS.length
         setActiveTab(DISCIPLINE_TABS[next].id)
-        event.currentTarget.parentElement.children[next].focus()
+        event.currentTarget.parentElement.querySelectorAll('[role="tab"]')[next].focus()
     }
 
     const selectedMark = selectedDiscipline
@@ -309,7 +310,7 @@ export default function DashboardView({
             </header>
 
             <div className="wrap navrow">
-                <nav className="tabs" aria-label="Основные разделы">
+                <SlidingCapsule as="nav" className="tabs" activeKey={mainNav} aria-label="Основные разделы">
                     {MAIN_NAV.map((item) => (
                         <button
                             key={item.id}
@@ -325,7 +326,7 @@ export default function DashboardView({
                             {item.mobileLabel && <span className="nav-label-short">{item.mobileLabel}</span>}
                         </button>
                     ))}
-                </nav>
+                </SlidingCapsule>
 
             </div>
 
@@ -364,7 +365,7 @@ export default function DashboardView({
                                 <span className={`badge badge--panel badge--${selectedGrade.tone}`}>{selectedGrade.text || "-"}</span>
                             </div>
 
-                            <div className="seg detail-tabs" role="tablist" aria-label="Разделы дисциплины">
+                            <SlidingCapsule className="seg detail-tabs" activeKey={activeTab} role="tablist" aria-label="Разделы дисциплины">
                                 {DISCIPLINE_TABS.map((t, index) => (
                                     <button
                                         key={t.id}
@@ -381,10 +382,10 @@ export default function DashboardView({
                                         {t.label}
                                     </button>
                                 ))}
-                            </div>
+                            </SlidingCapsule>
 
                             <div className="card panel__body detail-content">
-                                <section className="tab-panel tab-panel-active" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} tabIndex="0" key={activeTab}>
+                                <section className="tab-panel tab-panel-active" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} tabIndex="0" key={`${selectedDisciplineID}:${activeTab}`}>
                                     {activeTab === "grade" ? renderGradeTab() : activeTab === "journal" ? renderJournalTab() : activeTab === "map" ? renderMapTab() : renderTeachersTab()}
                                 </section>
                             </div>
@@ -423,7 +424,7 @@ export default function DashboardView({
             )}
 
             <div className="wrap">
-                <details className="card debug-card">
+                <details className="card debug-card" hidden>
                     <summary>Debug API</summary>
                     <pre>{JSON.stringify(debugLog, null, 2)}</pre>
                 </details>

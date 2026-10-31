@@ -2,6 +2,7 @@ import React from "react"
 import { fetchScheduleForGroup } from "../api/schedule"
 import { filterByWeek, mergeScheduleData } from "../utils/schedule"
 import { formatLessonRooms, getLessonTiming, getTodayLessons } from "../utils/today"
+import SlidingCapsule from "./SlidingCapsule"
 
 const STORAGE_KEY_GROUP = "schedule_group_id"
 
@@ -86,7 +87,7 @@ export default function TodayCard({ active = true }) {
             </div>
 
             {state === "success" && hasConditionalLessons && (
-                <div className="today__week" role="group" aria-label="Выберите учебную неделю">
+                <SlidingCapsule className="today__week" activeKey={weekType} role="group" aria-label="Выберите учебную неделю">
                     {[["all", "Все"], ["upper", "Верхняя"], ["lower", "Нижняя"]].map(([value, label]) => (
                         <button
                             key={value}
@@ -98,7 +99,7 @@ export default function TodayCard({ active = true }) {
                             {label}
                         </button>
                     ))}
-                </div>
+                </SlidingCapsule>
             )}
 
             {state === "loading" && (

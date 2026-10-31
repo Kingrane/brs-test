@@ -100,3 +100,17 @@ export function shortenFullName(fullName) {
     }
     return fullName
 }
+
+export function buildScheduleRows(timeSlots, lessons) {
+    const rows = new Map(timeSlots.map(slot => [slot.start, { ...slot }]))
+    for (const lesson of lessons) {
+        if (!rows.has(lesson.start)) rows.set(lesson.start, { start: lesson.start, end: lesson.end })
+    }
+    return [...rows.values()].sort((a, b) => a.start.localeCompare(b.start))
+}
+
+export function formatScheduleRoom(value) {
+    const room = String(value ?? "").trim()
+    if (!room || /^(онлайн|online|zoom|teams|ауд\.?|аудитория)/i.test(room)) return room
+    return `ауд. ${room}`
+}
