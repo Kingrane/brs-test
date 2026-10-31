@@ -8,32 +8,40 @@ export default function LoginView({
     loginStatus,
     handleLogin,
     handlePaste,
-    active
+    active,
+    busy
 }) {
     return (
         <section className={`view ${active ? "view-active" : ""}`.trim()} aria-labelledby="loginTitle">
-            <div className="auth-layout">
+            <div className="wrap auth-layout">
                 <aside className="auth-aside">
-                    <p className="kicker">Топ дс брс</p>
-                    <h1 id="loginTitle">Сервис БРС ЮФУ</h1>
-                    <p className="lead">Когда мне предложили купить проигрыватель, я отказался, ведь мне нужен только выигрыватель.</p>
+                    <p className="brand__top">БРС ЮФУ</p>
+                    <h1 id="loginTitle" className="auth-title">Сервис БРС<br />ЮФУ</h1>
+                    <p className="auth-lead">Оценки, журнал и расписание в одном месте. Для входа нужен только токен из личного кабинета БРС.</p>
                     <a className="link-inline" target="_blank" rel="noopener noreferrer" href="https://grade.sfedu.ru/sign?goal=/student/authtokenget">
-                        Получить токен доступа
+                        Получить токен доступа →
                     </a>
                 </aside>
 
-                <div className="auth-card" aria-live="polite">
-                    <label className="field">
+                <form className="auth-card" aria-busy={busy} onSubmit={(event) => { event.preventDefault(); if (!busy) handleLogin() }}>
+                    <div className="auth-card-head">
+                        <h2>Вход по токену</h2>
+                        <p>Вставьте токен из личного кабинета БРС</p>
+                    </div>
+
+                    <label className="field" htmlFor="authToken">
                         <span>Токен авторизации</span>
                         <input
                             className="input mono"
-                            type="text"
-                            placeholder="40 символов hex"
-                            maxLength="40"
+                            id="authToken"
+                            type="password"
+                            placeholder="Вставьте токен доступа"
+                            maxLength="80"
                             autoComplete="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
                             value={tokenInput}
                             onChange={(event) => setTokenInput(event.target.value)}
-                            onKeyDown={(event) => event.key === "Enter" && handleLogin()}
                         />
                     </label>
 
@@ -46,17 +54,21 @@ export default function LoginView({
                             />
                             <span>Запомнить на этом устройстве</span>
                         </label>
-                        <button className="btn btn-ghost" type="button" onClick={handlePaste}>Вставить</button>
+                        <button className="btn btn--light btn--sm" type="button" onClick={handlePaste}>Вставить</button>
                     </div>
 
                     <div className="auth-buttons">
-                        <button className="btn btn-primary" type="button" onClick={handleLogin}>Войти в БРС</button>
+                        <button className="btn btn--dark btn--lg btn--block" type="submit" disabled={busy}>{busy ? "Входим…" : "Войти в БРС"}</button>
                     </div>
 
                     <p className={`status ${loginStatus.message ? "status-visible" : ""} ${loginStatus.type ? `status-${loginStatus.type}` : ""}`.trim()} role="status">
                         {loginStatus.message}
                     </p>
-                </div>
+
+                    <p className="auth-hint">
+                        <b>Где взять токен:</b> перейдите по ссылке «Получить токен доступа», войдите в БРС и скопируйте токен. Сохраняйте его только на личном устройстве.
+                    </p>
+                </form>
             </div>
             <p className="footer-credit">romka навайбкодил</p>
         </section>

@@ -11,7 +11,7 @@ export default function ScheduleLessonCard({ lesson, pairNum }) {
         <article className={`sched-lesson ${lesson.isLecture ? "sched-lesson-lecture" : ""}`}>
             <div className="sched-lesson-head">
                 <span className="sched-lesson-time">
-                    <span className="sched-pair-num">{pairNum}</span>
+                    {pairNum && <span className="sched-pair-num">{pairNum}</span>}
                     {lesson.start}–{lesson.end}
                 </span>
                 {lesson.type !== "full" && (
@@ -29,7 +29,7 @@ export default function ScheduleLessonCard({ lesson, pairNum }) {
             )}
 
             <div className="sched-lesson-foot">
-                {uniqueRooms.length > 0 && <span className="sched-room mono">{uniqueRooms.join(" · ")}</span>}
+                {uniqueRooms.length > 0 && <span className="sched-room">{uniqueRooms.join(" · ")}</span>}
                 {lesson.hasSubgroups && <span className="sched-subgroup">подгруппы</span>}
                 {lesson.isLecture && <span className="sched-tag">Лекция</span>}
             </div>

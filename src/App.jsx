@@ -22,6 +22,7 @@ export default function App() {
     const [loginStatus, setLoginStatus] = useState({ message: "", type: "" })
     const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
     const [authReady, setAuthReady] = useState(false)
+    const [isLoggingIn, setIsLoggingIn] = useState(false)
 
     const [semesters, setSemesters] = useState([])
     const [currentSemesterID, setCurrentSemesterID] = useState("")
@@ -37,6 +38,7 @@ export default function App() {
     const [activeTab, setActiveTab] = useState("grade")
 
     const detailCacheRef = useRef(new Map())
+    const detailRequestRef = useRef(0)
 
     const selectedDiscipline = useMemo(
         () => disciplines.find((discipline) => String(discipline.ID) === String(selectedDisciplineID)) || null,
@@ -125,10 +127,12 @@ export default function App() {
 
     const selectDiscipline = async (disciplineID, options = {}) => {
         const nextID = String(disciplineID)
+        const requestID = ++detailRequestRef.current
         setSelectedDisciplineID(nextID)
 
         const cacheKey = `${currentSemesterID}:${nextID}`
-        if (!options.forceReload && detailCacheRef.current.has(cacheKey)) {
+        const cachedDetail = detailCacheRef.current.get(cacheKey)
+        if (!options.forceReload && cachedDetail?.journal && cachedDetail?.subject) {
             setRequest((prev) => ({ ...prev, detail: "success" }))
             return
         }
@@ -142,6 +146,13 @@ export default function App() {
                 fetchJson(ENDPOINTS.events, { token, id: nextID, semesterID: currentSemesterID, recordbookID }, handleDebugLog).catch(() => null)
             ])
 
+            if (requestID !== detailRequestRef.current) return
+            if (!journalResult && !subjectResult) {
+                detailCacheRef.current.delete(cacheKey)
+                setRequest((prev) => ({ ...prev, detail: "error" }))
+                return
+            }
+
             detailCacheRef.current.set(cacheKey, {
                 journal: journalResult,
                 subject: subjectResult,
@@ -149,7 +160,7 @@ export default function App() {
             })
             setRequest((prev) => ({ ...prev, detail: "success" }))
         } catch {
-            setRequest((prev) => ({ ...prev, detail: "error" }))
+            if (requestID === detailRequestRef.current) setRequest((prev) => ({ ...prev, detail: "error" }))
         }
     }
 
@@ -161,6 +172,7 @@ export default function App() {
     }
 
     const runLogin = async (authToken, rememberFlag, isAuto = false) => {
+        setIsLoggingIn(true)
         setToken(authToken)
         setRemember(rememberFlag)
         if (!isAuto) {
@@ -173,16 +185,20 @@ export default function App() {
             setView("dashboard")
             setLoginStatus({ message: "", type: "" })
         } catch (error) {
+            setRequest((prev) => ({ ...prev, semesters: prev.semesters === "loading" ? "error" : prev.semesters }))
             if (isAuto) {
                 setView("login")
                 setLoginStatus({ message: "Не удалось автоматически войти. Проверьте токен.", type: "error" })
                 return
             }
             setLoginStatus({ message: `Ошибка входа: ${error.message}`, type: "error" })
+        } finally {
+            setIsLoggingIn(false)
         }
     }
 
     const handleLogin = async () => {
+        if (isLoggingIn) return
         const authToken = tokenInput.trim()
         if (!isLikelyToken(authToken)) {
             setLoginStatus({ message: "Введите валидный токен (обычно 36-40 символов).", type: "error" })
@@ -197,6 +213,7 @@ export default function App() {
     }
 
     const confirmLogout = () => {
+        detailRequestRef.current += 1
         const storedAuth = getStoredAuth()
         setConfirmLogoutOpen(false)
         setTokenInput(storedAuth.token || tokenInput)
@@ -233,6 +250,8 @@ export default function App() {
     }
 
     const handleSemesterChange = async (event) => {
+        detailRequestRef.current += 1
+        setRequest((prev) => ({ ...prev, detail: "idle" }))
         const semesterID = event.target.value
         setCurrentSemesterID(semesterID)
         setSelectedDisciplineID("")
@@ -312,6 +331,7 @@ export default function App() {
                 loginStatus={loginStatus}
                 handleLogin={handleLogin}
                 handlePaste={handlePaste}
+                busy={isLoggingIn}
             />
 
             <ConfirmDialog

@@ -79,7 +79,12 @@ export default function ScheduleView() {
     }, [])
 
     const selectGrade = useCallback(async (gid, { force = false } = {}) => {
+        setRequest("loading")
+        setError("")
         setGradeId(gid)
+        setGroupId("")
+        setGroups([])
+        setSchedule(null)
         writeStored(STORAGE_KEY_GRADE, gid)
         const list = await loadGroups(gid, { force })
         if (!list.length) {
@@ -96,24 +101,25 @@ export default function ScheduleView() {
         await loadSchedule(next.id, { force })
     }, [loadGroups, loadSchedule, pickDefaultGroup])
 
-    useEffect(() => {
-        const bootstrap = async () => {
+    const bootstrap = useCallback(async (force = false) => {
+        setRequest("loading")
+        setError("")
             try {
                 const [gradeList, timeList] = await Promise.all([
-                    fetchScheduleGrades(),
-                    fetchScheduleTimeList().catch(() => [])
+                    fetchScheduleGrades({ force }),
+                    fetchScheduleTimeList({ force }).catch(() => [])
                 ])
                 setTimeSlots(buildTimeSlots(timeList))
                 setGrades(gradeList)
 
                 const storedGrade = readStored(STORAGE_KEY_GRADE, "")
                 const preferred = gradeList.find((g) => String(g.id) === String(storedGrade))
-                const fallback = gradeList.find((g) => g.degree === "bachelor" && Number(g.num) === 2)
-                    || (storedGrade && preferred)
+                const fallback = preferred
+                    || gradeList.find((g) => g.degree === "bachelor" && Number(g.num) === 2)
                     || gradeList[0]
 
                 if (fallback) {
-                    await selectGrade(String(fallback.id))
+                    await selectGrade(String(fallback.id), { force })
                 } else {
                     setRequest("success")
                 }
@@ -121,31 +127,19 @@ export default function ScheduleView() {
                 setError(e.message || "Не удалось загрузить курсы")
                 setRequest("error")
             }
-        }
-        bootstrap()
     }, [selectGrade])
+
+    useEffect(() => {
+        bootstrap()
+    }, [bootstrap])
 
     const handleGradeChange = async (event) => {
         const gid = event.target.value
         if (!gid) return
         try {
-            setRequest("loading")
-            setGradeId(gid)
-            writeStored(STORAGE_KEY_GRADE, gid)
-            const list = await loadGroups(gid)
-            setGroups(list)
-            if (!list.length) {
-                setGroupId("")
-                setSchedule(null)
-                setRequest("success")
-                return
-            }
-            const storedGroup = readStored(STORAGE_KEY_GROUP, "")
-            const next = pickDefaultGroup(list, storedGroup)
-            setGroupId(String(next.id))
-            writeStored(STORAGE_KEY_GROUP, String(next.id))
-            await loadSchedule(next.id)
-        } catch {
+            await selectGrade(gid)
+        } catch (e) {
+            setError(e.message || "Не удалось загрузить группы")
             setRequest("error")
         }
     }
@@ -163,10 +157,17 @@ export default function ScheduleView() {
     }
 
     const handleRetry = async () => {
-        if (groupId) {
-            await loadSchedule(groupId, { force: true })
-        } else if (grades.length) {
-            await selectGrade(gradeId || String(grades[0].id), { force: true })
+        try {
+            if (groupId) {
+                await loadSchedule(groupId, { force: true })
+            } else if (grades.length) {
+                await selectGrade(gradeId || String(grades[0].id), { force: true })
+            } else {
+                await bootstrap(true)
+            }
+        } catch (e) {
+            setError(e.message || "Не удалось загрузить расписание")
+            setRequest("error")
         }
     }
 
@@ -190,11 +191,11 @@ export default function ScheduleView() {
 
     return (
         <section className="sched-view">
-            <div className="toolbar card sched-toolbar">
+            <div className="card sched-toolbar">
                 <div className="sched-picker">
-                    <label className="field field-inline">
+                    <label className="field field--inline">
                         <span>Курс</span>
-                        <select className="input select" value={String(gradeId)} onChange={handleGradeChange} disabled={request === "loading" && !groups.length}>
+                        <select className="input select" value={String(gradeId)} onChange={handleGradeChange} disabled={request === "loading"}>
                             {grades.map((grade) => (
                                 <option key={String(grade.id)} value={String(grade.id)}>
                                     {formatGradeName(grade)}
@@ -203,9 +204,9 @@ export default function ScheduleView() {
                         </select>
                     </label>
 
-                    <label className="field field-inline">
+                    <label className="field field--inline">
                         <span>Группа</span>
-                        <select className="input select" value={String(groupId)} onChange={handleGroupChange} disabled={!groups.length}>
+                        <select className="input select" value={String(groupId)} onChange={handleGroupChange} disabled={!groups.length || request === "loading"}>
                             {groups.length === 0 ? (
                                 <option value="">Группы не найдены</option>
                             ) : (
@@ -223,7 +224,8 @@ export default function ScheduleView() {
                             <button
                                 key={option.value}
                                 type="button"
-                                className={`btn btn-sm ${weekType === option.value ? "btn-primary" : "btn-ghost"}`}
+                                className={`seg__item ${weekType === option.value ? "seg__item--active" : ""}`.trim()}
+                                aria-pressed={weekType === option.value}
                                 onClick={() => handleWeekChange(option.value)}
                             >
                                 {option.label}
@@ -232,65 +234,68 @@ export default function ScheduleView() {
                     </div>
                 </div>
 
-                <button className="btn btn-ghost" type="button" onClick={handleRetry} disabled={request === "loading"}>
+                <button className="btn btn--light" type="button" onClick={handleRetry} disabled={request === "loading"}>
                     Обновить
                 </button>
             </div>
 
             {request === "loading" && (
-                <main className="card panel-body sched-panel">
+                <div className="card sched-panel">
                     <StateLoading />
-                </main>
+                </div>
             )}
 
             {request === "error" && (
-                <main className="card panel-body sched-panel">
+                <div className="card sched-panel">
                     <StateError title="Не удалось загрузить расписание" details={error} onRetry={handleRetry} />
-                </main>
+                </div>
             )}
 
             {request === "success" && !hasAnyLessons && (
-                <main className="card panel-body sched-panel">
+                <div className="card sched-panel">
                     <StateEmpty
                         title="Расписание пока пусто"
                         description="На ближайшую неделю занятий не нашлось. Возможно, учебный год ещё не начался или расписание не опубликовано."
                     />
-                </main>
+                </div>
             )}
 
             {request === "success" && hasAnyLessons && (
-                <main className="sched-scroll sched-panel">
+                <div className="sched-scroll">
                     <div className="sched-grid">
                         {DAY_NAMES.map((dayName, index) => {
                             const isToday = index === todayIndex
                             const lessons = grouped[index] || []
+                            const starts = [...new Set([...timeSlots.map((slot) => slot.start), ...lessons.map((lesson) => lesson.start)])].sort()
 
                             return (
                                 <div className={`sched-day ${isToday ? "sched-day-today" : ""}`} key={dayName}>
                                     <div className="sched-day-head">
                                         <span className="sched-day-name">{dayName}</span>
-                                        <span className="sched-day-short">{SHORT_DAY_NAMES[index]} {isToday && <i className="sched-today">сегодня</i>}</span>
+                                        <span className="sched-day-short">{SHORT_DAY_NAMES[index]}</span>
+                                        {isToday && <span className="sched-today">сегодня</span>}
                                     </div>
                                     <div className="sched-day-body">
                                         {lessons.length === 0 && (
-                                            <p className="sched-day-empty">Выходной</p>
+                                            <p className="sched-day-empty">Нет занятий</p>
                                         )}
-                                        {timeSlots.map((slot) => {
-                                            const lesson = lessons.find((l) => l.start === slot.start)
-                                            if (!lesson) {
-                                                return <div className="sched-window" key={`${slot.num}-win`}>Окно</div>
+                                        {lessons.length > 0 && starts.map((start) => {
+                                            const slot = timeSlots.find((item) => item.start === start)
+                                            const matchingLessons = lessons.filter((lesson) => lesson.start === start)
+                                            if (!matchingLessons.length) {
+                                                return <div className="sched-window" key={start} aria-hidden="true">Окно</div>
                                             }
-                                            return <ScheduleLessonCard key={`${slot.num}-${lesson.id}`} lesson={lesson} pairNum={slot.num} />
+                                            return matchingLessons.map((lesson) => <ScheduleLessonCard key={`${start}-${lesson.id}`} lesson={lesson} pairNum={slot?.num} />)
                                         })}
                                     </div>
                                 </div>
                             )
                         })}
                     </div>
-                </main>
+                </div>
             )}
 
-            <p className="footer-credit footer-credit-dashboard sched-credit">
+            <p className="footer-credit sched-credit">
                 {selectedGroup ? `Расписание · ${formatGroupName(selectedGroup)}` : "Расписание"}
             </p>
         </section>

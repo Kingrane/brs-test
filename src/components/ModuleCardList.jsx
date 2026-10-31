@@ -1,5 +1,12 @@
 import React from "react"
 
+function percentOf(rate, max) {
+    const maxValue = Number(max)
+    const rateValue = Number(rate)
+    if (!Number.isFinite(maxValue) || maxValue <= 0 || !Number.isFinite(rateValue)) return null
+    return Math.max(0, Math.min(100, Math.round((rateValue / maxValue) * 100)))
+}
+
 export default function ModuleCardList({ subjectInfo, disciplineMap, submodules }) {
     if (!disciplineMap?.Modules) {
         return null
@@ -62,51 +69,98 @@ export default function ModuleCardList({ subjectInfo, disciplineMap, submodules 
     const totalRate = regRate + bonusRate + exRate + addExRate
     const totalMax = 100
 
+    const regPercent = percentOf(regRate, isExamType ? regMax : totalMax)
+    const totalPercent = percentOf(totalRate, totalMax)
+
+    const renderRows = (rows) => (
+        <div className="group__rows">
+            {rows.map((row) => (
+                <div className="mrow" key={row.key}>
+                    <span className="mrow__name">{row.name}</span>
+                    <span className="mrow__lead" aria-hidden="true"></span>
+                    <span className="mrow__val">
+                        {row.rate ?? "—"} <span className="mrow__max">/ {row.max ?? "—"}</span>
+                    </span>
+                </div>
+            ))}
+        </div>
+    )
+
     return (
         <div className="module-list">
-            {modules.map((module, idx) => (
-                <article key={`${idx}-${module.Title || "module"}`} className="module-card">
-                    <header>
-                        <h4>{module.Title || "Модуль"}</h4>
-                    </header>
-                    <ul>
-                        {(module.Submodules || []).filter(id => !examSubIds.has(String(id)) && !bonusSubIds.has(String(id))).map((submoduleID) => {
-                            const info = submodules[submoduleID] || {}
-                            return (
-                                <li key={String(submoduleID)}>
-                                    <span>{info.Title || `Подмодуль ${submoduleID}`}</span>
-                                    <span className="mono">{info.Rate ?? "-"} / {info.MaxRate ?? "-"}</span>
-                                </li>
-                            )
-                        })}
-                        {(module.Submodules || []).filter(id => !examSubIds.has(String(id)) && !bonusSubIds.has(String(id))).length === 0 && (
-                            <li>
-                                <span>Нет подмодулей</span>
-                                <span className="mono">-</span>
-                            </li>
-                        )}
-                    </ul>
-                </article>
-            ))}
-            <div className="module-total">
-                <span>Итого по модулям</span>
-                <span className="mono">{regRate} / {isExamType ? regMax : totalMax}</span>
-            </div>
+            {modules.map((module, idx) => {
+                const rows = (module.Submodules || [])
+                    .filter(id => !examSubIds.has(String(id)) && !bonusSubIds.has(String(id)))
+                    .map((submoduleID) => {
+                        const info = submodules[submoduleID] || {}
+                        return {
+                            key: String(submoduleID),
+                            name: info.Title || `Подмодуль ${submoduleID}`,
+                            rate: info.Rate,
+                            max: info.MaxRate
+                        }
+                    })
+
+                return (
+                    <section className="group" key={`${idx}-${module.Title || "module"}`}>
+                        <h4 className="group__title">{module.Title || "Модуль"}</h4>
+                        {rows.length > 0
+                            ? renderRows(rows)
+                            : renderRows([{ key: "empty", name: "Нет подмодулей", rate: "—", max: "—" }])}
+                    </section>
+                )
+            })}
+
             {hasBonusData && (
-                <div className="module-bonus">
-                    <span>Бонусные баллы</span>
-                    <span className="mono">{bonusRate} / {bonusMax}</span>
-                </div>
+                <section className="group">
+                    <h4 className="group__title">Бонусные баллы</h4>
+                    {renderRows([{ key: "bonus", name: "Бонус", rate: bonusRate, max: bonusMax }])}
+                </section>
             )}
+
             {hasExamData && (
-                <div className="module-exam">
-                    <span>Экзамен</span>
-                    <span className="mono">{showExamRate ?? "-"} / {showExamMax ?? "-"}</span>
-                </div>
+                <section className="group">
+                    <h4 className="group__title">Экзамен</h4>
+                    {renderRows([{ key: "exam", name: "Экзамен", rate: showExamRate, max: showExamMax }])}
+                </section>
             )}
-            <div className="module-total module-total-grand">
-                <span>Итого</span>
-                <span className="mono">{totalRate} / {totalMax}</span>
+
+            <div className="total">
+                <div className="total__row">
+                    <span className="total__label">Итого модули:</span>
+                    <span className="total__val">
+                        <b>{regRate} из {isExamType ? regMax : totalMax} баллов</b>
+                    </span>
+                </div>
+                <div
+                    className="bar"
+                    role="progressbar"
+                    aria-valuenow={regPercent ?? 0}
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-label="Прогресс по модулям"
+                >
+                    <span className="bar__fill" style={{ "--progress": (regPercent ?? 0) / 100 }}></span>
+                </div>
+            </div>
+
+            <div className="total module-total-grand">
+                <div className="total__row">
+                    <span className="total__label">Всего по дисциплине:</span>
+                    <span className="total__val">
+                        <b>{totalRate} из {totalMax} баллов</b>
+                    </span>
+                </div>
+                <div
+                    className="bar"
+                    role="progressbar"
+                    aria-valuenow={totalPercent ?? 0}
+                    aria-valuemin="0"
+                    aria-valuemax="100"
+                    aria-label="Итоговый прогресс по дисциплине"
+                >
+                    <span className="bar__fill" style={{ "--progress": (totalPercent ?? 0) / 100 }}></span>
+                </div>
             </div>
         </div>
     )

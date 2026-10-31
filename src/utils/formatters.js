@@ -3,6 +3,13 @@ export function normalizeNumber(value) {
     return Number.isFinite(num) ? num : null
 }
 
+export function formatDisciplinePoints(discipline) {
+    const rate = discipline?.Rate != null && discipline.Rate !== "" ? normalizeNumber(discipline.Rate) : null
+    const max = normalizeNumber(discipline?.MaxCurrentRate)
+    if (max !== null && max > 0) return `${rate ?? "—"} / ${max} б.`
+    return rate !== null ? `${rate} б.` : "—"
+}
+
 export function formatDisciplineType(type) {
     const key = String(type || "").toLowerCase()
     const map = {

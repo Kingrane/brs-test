@@ -7,7 +7,7 @@ export default function EventsTable({ events }) {
     }
 
     return (
-        <div className="table-wrap">
+        <div className="table-wrap" role="region" aria-label="История событий. Таблица с горизонтальной прокруткой" tabIndex="0">
             <table>
                 <thead>
                     <tr>

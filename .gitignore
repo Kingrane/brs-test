@@ -5,6 +5,7 @@ nul
 .playwright-mcp
 *.log
 design.md
+!/docs/DESIGN.md
 .idea
 mobile-nav.png
 webpush.md

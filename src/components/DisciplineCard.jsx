@@ -1,5 +1,5 @@
 import React from "react"
-import { formatDisciplineType, formatTeacherShortName, getGradePresentation, getIndexTeachersForDiscipline } from "../utils/formatters"
+import { formatDisciplinePoints, formatDisciplineType, formatTeacherShortName, getGradePresentation, getIndexTeachersForDiscipline } from "../utils/formatters"
 
 export default function DisciplineCard({ discipline, mark, active, index, teachersMap, onClick }) {
     const id = String(discipline.ID)
@@ -7,30 +7,28 @@ export default function DisciplineCard({ discipline, mark, active, index, teache
     const teachers = getIndexTeachersForDiscipline(teachersMap, id)
     const teachersPreview = teachers.slice(0, 2).map((teacher) => formatTeacherShortName(teacher)).join(" · ")
     const teachersOverflow = teachers.length > 2 ? ` +${teachers.length - 2}` : ""
-    const points = discipline.MaxCurrentRate ? `${discipline.Rate || 0} / ${discipline.MaxCurrentRate}` : `${discipline.Rate || 0}`
+    const points = formatDisciplinePoints(discipline)
+    const hasPoints = points !== "—"
+    const type = formatDisciplineType(discipline.Type)
+    const meta = [type, teachersPreview ? `${teachersPreview}${teachersOverflow}` : ""].filter(Boolean).join(" · ")
 
     return (
         <button
-            className={`disc-item ${active ? "disc-item-active" : ""}`.trim()}
+            className={`row ${active ? "row--active" : ""}`.trim()}
             data-id={id}
             type="button"
-            style={{ "--delay": `${index * 50}ms` }}
+            aria-current={active ? "true" : undefined}
             onClick={onClick}
         >
-            <div className="disc-item-head">
-                <span className="disc-title">{discipline.SubjectName || "Без названия"}</span>
-                <span className={`grade-chip grade-${grade.tone}`}>{grade.text}</span>
-            </div>
-            <div className="disc-item-meta">
-                <span>{formatDisciplineType(discipline.Type)}</span>
-                <span className="mono">{points} б.</span>
-            </div>
-            <div
-                className="disc-item-teachers"
-                title={teachers.map((teacher) => formatTeacherShortName(teacher)).join(", ") || "Преподаватели не указаны"}
-            >
-                {teachersPreview || "Преподаватели не указаны"}{teachersOverflow}
-            </div>
+            <span className="row__num" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
+            <span className="row__main">
+                <span className="row__title">{discipline.SubjectName || "Без названия"}</span>
+                <span className="row__meta" title={meta}>{meta || "Тип не указан"}</span>
+            </span>
+            <span className="row__right">
+                <span className={`row__pts ${hasPoints ? "" : "row__pts--empty"}`.trim()}>{points}</span>
+                <span className={`badge badge--${grade.tone}`}>{grade.text}</span>
+            </span>
         </button>
     )
 }

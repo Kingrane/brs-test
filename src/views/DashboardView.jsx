@@ -8,7 +8,21 @@ import JournalTable from "../components/JournalTable"
 import EventsTable from "../components/EventsTable"
 import ModuleCardList from "../components/ModuleCardList"
 import ScheduleView from "../components/ScheduleView"
-import { formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
+import TodayCard from "../components/TodayCard"
+import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
+
+const MAIN_NAV = [
+    { id: "disciplines", label: "Дисциплины" },
+    { id: "schedule", label: "Расписание" },
+    { id: "events", label: "История событий", mobileLabel: "События" }
+]
+
+const DISCIPLINE_TABS = [
+    { id: "grade", label: "Оценка" },
+    { id: "journal", label: "Журнал" },
+    { id: "map", label: "Модули" },
+    { id: "teachers", label: "Преподаватели" }
+]
 
 export default function DashboardView({
     active,
@@ -53,24 +67,46 @@ export default function DashboardView({
         selectDiscipline(id)
         setMobileView("detail")
         if (typeof window !== "undefined" && window.innerWidth <= 768) {
-            window.scrollTo({ top: 0, behavior: "smooth" })
+            window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })
+            requestAnimationFrame(() => document.querySelector(".mobile-back-btn")?.focus({ preventScroll: true }))
         }
     }
 
     const handleBackToList = () => {
         setMobileView("list")
+        requestAnimationFrame(() => document.querySelector(`.row[data-id="${selectedDisciplineID}"]`)?.focus({ preventScroll: true }))
+    }
+
+    const retryDetail = () => selectDiscipline(selectedDisciplineID, { forceReload: true })
+    const detailError = () => <StateError title="Не удалось загрузить данные" details="Попробуйте повторить запрос к БРС." onRetry={retryDetail} />
+
+    const handleTabKeyDown = (event, index) => {
+        const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
+        if (!offset && event.key !== "Home" && event.key !== "End") return
+        event.preventDefault()
+        const next = event.key === "Home" ? 0 : event.key === "End" ? DISCIPLINE_TABS.length - 1 : (index + offset + DISCIPLINE_TABS.length) % DISCIPLINE_TABS.length
+        setActiveTab(DISCIPLINE_TABS[next].id)
+        event.currentTarget.parentElement.children[next].focus()
     }
 
     const selectedMark = selectedDiscipline
         ? marks[String(selectedDiscipline.ID)] || marks[selectedDiscipline.ID] || ""
         : ""
-    const selectedGrade = selectedDiscipline ? getGradePresentation(selectedMark, selectedDiscipline) : { text: "-" }
+    const selectedGrade = selectedDiscipline ? getGradePresentation(selectedMark, selectedDiscipline) : { text: "-", tone: "muted" }
+    const selectedPoints = formatDisciplinePoints(selectedDiscipline)
+    const panelSub = selectedDiscipline
+        ? `${formatDisciplineType(selectedDiscipline.Type)} · ${selectedPoints}`
+        : "Выберите дисциплину в списке"
 
     const parsedGlobalEvents = parseEventsData(globalEventsData)
 
     const renderDisciplines = () => {
         if (request.index === "loading") {
             return <StateLoading />
+        }
+
+        if (request.index === "error") {
+            return <StateError title="Не удалось загрузить дисциплины" details={lastMainLoadError} onRetry={() => loadIndex(token, currentSemesterID).catch(() => {})} />
         }
 
         if (!disciplines.length) {
@@ -131,16 +167,38 @@ export default function DashboardView({
         const examRate = subject?.ExamRate ?? subject?.Exam?.Rate ?? disciplineMap?.Exam?.Rate ?? disciplineMap?.Final?.Rate ?? examFromSub?.Rate ?? null
         const examMax = subject?.MaxExamRate ?? subject?.Exam?.MaxRate ?? disciplineMap?.Exam?.MaxRate ?? disciplineMap?.Final?.MaxRate ?? examFromSub?.MaxRate ?? null
 
+        const rateValue = Number(subject?.Rate ?? selectedDiscipline?.Rate)
+        const maxValue = Number(subject?.MaxCurrentRate ?? selectedDiscipline?.MaxCurrentRate)
+        const percent = Number.isFinite(rateValue) && Number.isFinite(maxValue) && maxValue > 0
+            ? Math.max(0, Math.min(100, Math.round((rateValue / maxValue) * 100)))
+            : null
+
         return (
             <div className="grade-panel">
-                <div className={`grade-main grade-${grade.tone}`}>{grade.text}</div>
-                <p className="grade-caption">{grade.description}</p>
+                <div className="grade-hero">
+                    <div className={`grade-main grade-${grade.tone}`}>{grade.text}</div>
+                    <p className="grade-caption">{grade.description}</p>
+                </div>
+
+                {percent !== null && (
+                    <div
+                        className="bar"
+                        role="progressbar"
+                        aria-valuenow={percent}
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-label="Текущий рейтинг по дисциплине"
+                    >
+                        <span className={`bar__fill bar__fill--${grade.tone}`} style={{ "--progress": percent / 100 }}></span>
+                    </div>
+                )}
+
                 <dl className="kv-grid">
                     <div><dt>Тип</dt><dd>{formatDisciplineType(subject?.Type)}</dd></div>
                     {isExamType && (
-                        <div><dt>Баллы за экзамен</dt><dd className="mono">{examRate ?? "-"} / {examMax ?? "-"}</dd></div>
+                        <div><dt>Баллы за экзамен</dt><dd>{examRate ?? "-"} / {examMax ?? "-"}</dd></div>
                     )}
-                    <div><dt>Баллы</dt><dd className="mono">{subject?.Rate ?? selectedDiscipline?.Rate ?? "-"} / {subject?.MaxCurrentRate ?? selectedDiscipline?.MaxCurrentRate ?? "-"}</dd></div>
+                    <div><dt>Баллы</dt><dd>{subject?.Rate ?? selectedDiscipline?.Rate ?? "-"} / {subject?.MaxCurrentRate ?? selectedDiscipline?.MaxCurrentRate ?? "-"}</dd></div>
                 </dl>
             </div>
         )
@@ -154,6 +212,8 @@ export default function DashboardView({
         if (request.detail === "loading") {
             return <StateLoading />
         }
+
+        if (request.detail === "error" || (request.detail === "success" && !detail.journal)) return detailError()
 
         const journal = Array.isArray(detail.journal?.response?.Journal) ? detail.journal.response.Journal : []
         if (!journal.length) {
@@ -171,6 +231,8 @@ export default function DashboardView({
         if (request.detail === "loading") {
             return <StateLoading />
         }
+
+        if (request.detail === "error" || (request.detail === "success" && !detail.subject)) return detailError()
 
         const disciplineMap = detail.subject?.response?.DisciplineMap
         const submodules = detail.subject?.response?.Submodules || {}
@@ -192,6 +254,8 @@ export default function DashboardView({
             return <StateLoading />
         }
 
+        if (request.detail === "error" && !mergedTeachers.length) return detailError()
+
         if (!mergedTeachers.length) {
             return <StateEmpty title="Список пуст" description="Преподаватели для выбранной дисциплины не найдены." />
         }
@@ -205,97 +269,84 @@ export default function DashboardView({
         )
     }
 
-    const disciplineTabs = [
-        { id: "grade", label: "Оценка" },
-        { id: "journal", label: "Журнал" },
-        { id: "map", label: "Модули" },
-        { id: "teachers", label: "Преподаватели" }
-    ]
-
     return (
-        <section className={`view ${active ? "view-active" : ""}`.trim()} aria-label="Панель оценок">
+        <section className={`view dashboard-view ${active ? "view-active" : ""}`.trim()} aria-label="Панель оценок">
             <header className="topbar">
-                <div>
-                    <p className="kicker">БРС ЮФУ</p>
-                    <h2>Сервис БРС</h2>
-                </div>
-                <div className="topbar-actions">
-                    <button className="btn btn-ghost" type="button" onClick={handleRefresh}>Обновить</button>
-                    <button className="btn btn-danger" type="button" onClick={handleLogout}>Выйти</button>
+                <div className="wrap topbar__in">
+                    <div className="brand">
+                        <span className="brand__top">БРС ЮФУ</span>
+                        <span className="brand__name">SuperBRS</span>
+                    </div>
+
+                    <div className="topbar__actions">
+                        <label className="field field--inline semester-picker">
+                            <span>Семестр</span>
+                            <select className="input select" value={currentSemesterID} onChange={handleSemesterChange} disabled={request.index === "loading"}>
+                                {semesters.length === 0 ? (
+                                    <option value="">{request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"}</option>
+                                ) : (
+                                    semesters.map((semester) => (
+                                        <option key={String(semester.ID)} value={String(semester.ID)}>{formatSemesterLabel(semester)}</option>
+                                    ))
+                                )}
+                            </select>
+                        </label>
+                        <button className="btn btn--dark" type="button" onClick={handleRefresh} disabled={request.index === "loading" || request.detail === "loading"}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M20 11a8 8 0 1 0-2.3 5.6"></path>
+                                <path d="M20 5v6h-6"></path>
+                            </svg>
+                            Обновить
+                        </button>
+                        <button className="btn btn--light logout-button" type="button" onClick={handleLogout} aria-label="Выйти">
+                            <span className="action-label">Выйти</span>
+                            <svg className="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M10 4H5v16h5M9 12h11m-4-4 4 4-4 4" />
+                            </svg>
+                        </button>
+                    </div>
                 </div>
             </header>
 
-            <section className="toolbar card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div className="main-nav" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                        type="button"
-                        className={`btn ${mainNav === "disciplines" ? "btn-primary" : "btn-ghost"}`}
-                        onClick={() => {
-                            setMainNav("disciplines")
-                            setMobileView("list")
-                        }}
-                    >
-                        Дисциплины
-                    </button>
-                    <button
-                        type="button"
-                        className={`btn ${mainNav === "events" ? "btn-primary" : "btn-ghost"}`}
-                        onClick={() => {
-                            setMainNav("events")
-                            setMobileView("list")
-                        }}
-                    >
-                        История событий
-                    </button>
-                    <button
-                        type="button"
-                        className={`btn btn-schedule-nav ${mainNav === "schedule" ? "btn-primary" : "btn-ghost"}`}
-                        onClick={() => {
-                            setMainNav("schedule")
-                            setMobileView("list")
-                        }}
-                    >
-                        Расписание
-                    </button>
-                </div>
-
-                <div className="main-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <label className="field field-inline" style={{ margin: 0 }}>
-                        <span>Семестр</span>
-                        <select className="input select" value={currentSemesterID} onChange={handleSemesterChange}>
-                            {semesters.length === 0 ? (
-                                <option value="">{request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"}</option>
-                            ) : (
-                                semesters.map((semester) => (
-                                    <option key={String(semester.ID)} value={String(semester.ID)}>
-                                        {formatSemesterLabel(semester)}
-                                    </option>
-                                ))
-                            )}
-                        </select>
-                    </label>
-                    {lastMainLoadError && (
-                        <button className="btn btn-ghost" type="button" onClick={() => loadIndex(token, currentSemesterID)}>
-                            Повторить запрос
+            <div className="wrap navrow">
+                <nav className="tabs" aria-label="Основные разделы">
+                    {MAIN_NAV.map((item) => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            className={`tab ${mainNav === item.id ? "tab-active" : ""}`.trim()}
+                            aria-current={mainNav === item.id ? "page" : undefined}
+                            onClick={() => {
+                                setMainNav(item.id)
+                                setMobileView("list")
+                            }}
+                        >
+                            <span className={item.mobileLabel ? "nav-label-full" : undefined}>{item.label}</span>
+                            {item.mobileLabel && <span className="nav-label-short">{item.mobileLabel}</span>}
                         </button>
-                    )}
-                </div>
-            </section>
+                    ))}
+                </nav>
+
+            </div>
 
             {mainNav === "disciplines" ? (
-                <main className={`dashboard-grid ${mobileView === "detail" ? "mobile-view-detail" : "mobile-view-list"}`}>
-                    <section className="card panel-list">
-                        <div className="panel-head">
-                            <h3>Список дисциплин</h3>
-                            <span className="pill">{String(disciplines.length)}</span>
-                        </div>
-                        <div className="panel-body">{renderDisciplines()}</div>
-                    </section>
+                <main className={`wrap dashboard-grid ${mobileView === "detail" ? "mobile-view-detail" : "mobile-view-list"}`}>
+                    <div className="col col--left">
+                        <section className="list-section" aria-labelledby="disciplineListTitle">
+                            <div className="list__head">
+                                <h2 className="list__title" id="disciplineListTitle">Список дисциплин</h2>
+                                <span className="badge badge--ember">{String(disciplines.length)}</span>
+                            </div>
+                            <div className="card list">{renderDisciplines()}</div>
+                        </section>
 
-                    <section className="detail-column">
-                        <article className="card panel-detail">
-                            <div className="panel-head panel-head-detail">
-                                <div className="panel-head-title-wrap">
+                        <TodayCard active={active} />
+                    </div>
+
+                    <div className="col col--right">
+                        <article className="discipline-detail">
+                            <div className="panel__head">
+                                <div className="panel__title-wrap">
                                     <button
                                         type="button"
                                         className="mobile-back-btn"
@@ -305,45 +356,56 @@ export default function DashboardView({
                                         <span className="mobile-back-icon" aria-hidden="true">←</span>
                                         <span>К списку</span>
                                     </button>
-                                    <h3 title={selectedDiscipline?.SubjectName}>{selectedDiscipline?.SubjectName || "Детали дисциплины"}</h3>
+                                    <h1 className="panel__title" title={selectedDiscipline?.SubjectName}>
+                                        {selectedDiscipline?.SubjectName || "Детали дисциплины"}
+                                    </h1>
+                                    <p className="panel__sub">{panelSub}</p>
                                 </div>
-                                <span className="pill">{selectedGrade.text || "-"}</span>
+                                <span className={`badge badge--panel badge--${selectedGrade.tone}`}>{selectedGrade.text || "-"}</span>
                             </div>
 
-                            <nav className="tabs" aria-label="Вкладки дисциплины">
-                                {disciplineTabs.map((t) => (
+                            <div className="seg detail-tabs" role="tablist" aria-label="Разделы дисциплины">
+                                {DISCIPLINE_TABS.map((t, index) => (
                                     <button
                                         key={t.id}
-                                        className={`tab ${activeTab === t.id ? "tab-active" : ""}`.trim()}
                                         type="button"
+                                        role="tab"
+                                        id={`tab-${t.id}`}
+                                        aria-controls={`panel-${t.id}`}
+                                        tabIndex={activeTab === t.id ? 0 : -1}
+                                        aria-selected={activeTab === t.id}
+                                        className={`seg__item ${activeTab === t.id ? "seg__item--active" : ""}`.trim()}
                                         onClick={() => setActiveTab(t.id)}
+                                        onKeyDown={(event) => handleTabKeyDown(event, index)}
                                     >
                                         {t.label}
                                     </button>
                                 ))}
-                            </nav>
+                            </div>
 
-                            <div className="panel-body">
-                                <section className={`tab-panel ${activeTab === "grade" ? "tab-panel-active" : ""}`.trim()}>{renderGradeTab()}</section>
-                                <section className={`tab-panel ${activeTab === "journal" ? "tab-panel-active" : ""}`.trim()}>{renderJournalTab()}</section>
-                                <section className={`tab-panel ${activeTab === "map" ? "tab-panel-active" : ""}`.trim()}>{renderMapTab()}</section>
-                                <section className={`tab-panel ${activeTab === "teachers" ? "tab-panel-active" : ""}`.trim()}>{renderTeachersTab()}</section>
+                            <div className="card panel__body detail-content">
+                                <section className="tab-panel tab-panel-active" role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} tabIndex="0" key={activeTab}>
+                                    {activeTab === "grade" ? renderGradeTab() : activeTab === "journal" ? renderJournalTab() : activeTab === "map" ? renderMapTab() : renderTeachersTab()}
+                                </section>
                             </div>
                         </article>
-                    </section>
+                    </div>
                 </main>
             ) : mainNav === "schedule" ? (
-                <main className="dashboard-schedule-view">
+                <main className="wrap dashboard-schedule-view">
                     <ScheduleView />
                 </main>
             ) : (
-                <main className="dashboard-events-view">
-                    <section className="card">
-                        <div className="panel-head">
-                            <h3>История событий</h3>
-                            <span className="pill">{String(parsedGlobalEvents.length)}</span>
+                <main className="wrap dashboard-events-view">
+                    <section className="card panel">
+                        <div className="panel__head">
+                            <div className="panel__title-wrap">
+                                <h2 className="panel__title">История событий</h2>
+                                <p className="panel__sub">Изменения оценок и посещаемости по всем дисциплинам</p>
+                            </div>
+                            <span className="badge badge--ember">{String(parsedGlobalEvents.length)}</span>
                         </div>
-                        <div className="panel-body">
+                        <div className="panel__body">
                             {request.globalEvents === "loading" ? (
                                 <StateLoading />
                             ) : request.globalEvents === "error" ? (
@@ -360,11 +422,13 @@ export default function DashboardView({
                 </main>
             )}
 
-            <details className="card debug-card" style={{ marginTop: '1.5rem' }}>
-                <summary>Debug API</summary>
-                <pre>{JSON.stringify(debugLog, null, 2)}</pre>
-            </details>
-            <p className="footer-credit footer-credit-dashboard">romka навайбкодил</p>
+            <div className="wrap">
+                <details className="card debug-card">
+                    <summary>Debug API</summary>
+                    <pre>{JSON.stringify(debugLog, null, 2)}</pre>
+                </details>
+                <p className="footer-credit">romka навайбкодил</p>
+            </div>
         </section>
     )
 }

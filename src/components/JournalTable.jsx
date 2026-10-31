@@ -6,7 +6,7 @@ export default function JournalTable({ journal }) {
     }
 
     return (
-        <div className="table-wrap">
+        <div className="table-wrap" role="region" aria-label="Журнал занятий. Таблица с горизонтальной прокруткой" tabIndex="0">
             <table>
                 <thead>
                     <tr>
