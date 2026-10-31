@@ -4,6 +4,7 @@ import StateEmpty from "./StateEmpty"
 import StateError from "./StateError"
 import ScheduleLessonCard from "./ScheduleLessonCard"
 import SlidingCapsule from "./SlidingCapsule"
+import DropdownSelect from "./DropdownSelect"
 import { fetchScheduleGrades, fetchGroupsForGrade, fetchScheduleForGroup, fetchScheduleTimeList } from "../api/schedule"
 import {
     DAY_NAMES,
@@ -222,31 +223,15 @@ export default function ScheduleView() {
                 </div>
                 <div className="sched-toolbar">
                     <div className="sched-picker">
-                        <label className="field field--inline">
+                        <div className="field field--inline">
                             <span>Курс</span>
-                            <select className="input select" value={String(gradeId)} onChange={handleGradeChange} disabled={request === "loading"}>
-                                {grades.map((grade) => (
-                                    <option key={String(grade.id)} value={String(grade.id)}>
-                                        {formatGradeName(grade)}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                            <DropdownSelect label="Курс" value={gradeId} options={grades.map(grade => ({ value: String(grade.id), label: formatGradeName(grade) }))} onChange={value => handleGradeChange({ target: { value } })} disabled={request === "loading"} placeholder="Курсы не найдены" />
+                        </div>
 
-                        <label className="field field--inline">
+                        <div className="field field--inline">
                             <span>Группа</span>
-                            <select className="input select" value={String(groupId)} onChange={handleGroupChange} disabled={!groups.length || request === "loading"}>
-                                {groups.length === 0 ? (
-                                    <option value="">Группы не найдены</option>
-                                ) : (
-                                    groups.map((group) => (
-                                        <option key={String(group.id)} value={String(group.id)}>
-                                            {formatGroupName(group)}
-                                        </option>
-                                    ))
-                                )}
-                            </select>
-                        </label>
+                            <DropdownSelect label="Группа" value={groupId} options={groups.map(group => ({ value: String(group.id), label: formatGroupName(group) }))} onChange={value => handleGroupChange({ target: { value } })} disabled={!groups.length || request === "loading"} placeholder="Группы не найдены" />
+                        </div>
                     </div>
                     <SlidingCapsule className="sched-week-toggle" activeKey={weekType} role="group" aria-label="Неделя">
                         {WEEK_OPTIONS.map((option) => (

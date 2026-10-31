@@ -1,6 +1,6 @@
 import React, { useCallback, useLayoutEffect, useRef } from "react"
 
-export default function SlidingCapsule({ as: Tag = "div", activeKey, className = "", children, ...props }) {
+export default function SlidingCapsule({ as: Tag = "div", activeKey, layoutKey, className = "", children, ...props }) {
     const rootRef = useRef(null)
     const indicatorRef = useRef(null)
     const targetRef = useRef(null)
@@ -10,7 +10,13 @@ export default function SlidingCapsule({ as: Tag = "div", activeKey, className =
         const root = rootRef.current
         const indicator = indicatorRef.current
         const selected = root?.querySelector('button[aria-selected="true"], button[aria-pressed="true"], button[aria-current]')
-        if (!selected || !selected.offsetWidth) return
+        if (!selected) {
+            animationRef.current?.cancel()
+            targetRef.current = null
+            delete root.dataset.ready
+            return
+        }
+        if (!selected.offsetWidth) return
         const target = { x: selected.offsetLeft, y: selected.offsetTop, width: selected.offsetWidth, height: selected.offsetHeight }
         const previous = targetRef.current
         if (previous && Object.keys(target).every(key => target[key] === previous[key])) return
@@ -28,15 +34,15 @@ export default function SlidingCapsule({ as: Tag = "div", activeKey, className =
             const x = currentRect.left - rootRect.left + root.scrollLeft
             const y = currentRect.top - rootRect.top + root.scrollTop
             animationRef.current = indicator.animate([
-                { transform: `translate3d(${x}px, ${y}px, 0) scaleX(${currentRect.width / target.width})` },
-                { transform: `translate3d(${target.x}px, ${target.y}px, 0) scaleX(1)` }
+                { transform: `translate3d(${x}px, ${y}px, 0) scale(${currentRect.width / target.width}, ${currentRect.height / target.height})` },
+                { transform: `translate3d(${target.x}px, ${target.y}px, 0) scale(1)` }
             ], { duration: 360, easing: "cubic-bezier(0.22, 0.8, 0.25, 1)" })
         }
     }, [])
 
     useLayoutEffect(() => {
         move(true)
-    }, [activeKey, move])
+    }, [activeKey, layoutKey, move])
 
     useLayoutEffect(() => {
         let mounted = true
@@ -53,7 +59,7 @@ export default function SlidingCapsule({ as: Tag = "div", activeKey, className =
             motion.removeEventListener("change", stopMotion)
             animationRef.current?.cancel()
         }
-    }, [move])
+    }, [layoutKey, move])
 
     return (
         <Tag ref={rootRef} className={`sliding-capsule ${className}`.trim()} {...props}>

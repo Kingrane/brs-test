@@ -10,6 +10,7 @@ import ModuleCardList from "../components/ModuleCardList"
 import ScheduleView from "../components/ScheduleView"
 import TodayCard from "../components/TodayCard"
 import SlidingCapsule from "../components/SlidingCapsule"
+import DropdownSelect from "../components/DropdownSelect"
 import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
 
 const MAIN_NAV = [
@@ -53,29 +54,70 @@ export default function DashboardView({
     handleLogout
 }) {
     const [mobileView, setMobileView] = React.useState("list")
+    const listScrollRef = React.useRef(0)
+    const detailHistoryRef = React.useRef(false)
+
+    const restoreList = () => {
+        setMobileView("list")
+        requestAnimationFrame(() => {
+            if (window.innerWidth <= 768) window.scrollTo({ top: listScrollRef.current, behavior: "instant" })
+            document.querySelector(`.row[data-id="${selectedDisciplineID}"]`)?.focus({ preventScroll: true })
+        })
+    }
 
     React.useEffect(() => {
         setMobileView("list")
-    }, [currentSemesterID, mainNav])
+        if (detailHistoryRef.current && window.history.state?.brsDetail) {
+            detailHistoryRef.current = false
+            window.history.back()
+        }
+    }, [active, currentSemesterID, mainNav])
 
     React.useEffect(() => {
         if (!selectedDisciplineID) {
             setMobileView("list")
+            if (detailHistoryRef.current && window.history.state?.brsDetail) {
+                detailHistoryRef.current = false
+                window.history.back()
+            }
         }
     }, [selectedDisciplineID])
 
+    React.useEffect(() => {
+        if (!active) return
+        const onPopState = event => {
+            const target = event.state?.brsDetail
+            if (target && mainNav === "disciplines" && target.semesterID === currentSemesterID && disciplines.some(discipline => String(discipline.ID) === target.id)) {
+                detailHistoryRef.current = true
+                selectDiscipline(target.id)
+                setMobileView("detail")
+                requestAnimationFrame(() => document.querySelector(".mobile-back-btn")?.focus({ preventScroll: true }))
+            } else {
+                detailHistoryRef.current = false
+                restoreList()
+            }
+        }
+        window.addEventListener("popstate", onPopState)
+        return () => window.removeEventListener("popstate", onPopState)
+    }, [active, mainNav, currentSemesterID, disciplines, selectedDisciplineID, selectDiscipline])
+
     const handleDisciplineClick = (id) => {
         selectDiscipline(id)
-        setMobileView("detail")
         if (typeof window !== "undefined" && window.innerWidth <= 768) {
+            listScrollRef.current = window.scrollY
+            const state = { ...window.history.state, brsDetail: { id: String(id), semesterID: currentSemesterID } }
+            if (window.history.state?.brsDetail) window.history.replaceState(state, "")
+            else window.history.pushState(state, "")
+            detailHistoryRef.current = true
+            setMobileView("detail")
             window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth" })
             requestAnimationFrame(() => document.querySelector(".mobile-back-btn")?.focus({ preventScroll: true }))
         }
     }
 
     const handleBackToList = () => {
-        setMobileView("list")
-        requestAnimationFrame(() => document.querySelector(`.row[data-id="${selectedDisciplineID}"]`)?.focus({ preventScroll: true }))
+        if (window.history.state?.brsDetail) window.history.back()
+        else restoreList()
     }
 
     const retryDetail = () => selectDiscipline(selectedDisciplineID, { forceReload: true })
@@ -107,7 +149,7 @@ export default function DashboardView({
         }
 
         if (request.index === "error") {
-            return <StateError title="Не удалось загрузить дисциплины" details={lastMainLoadError} onRetry={() => loadIndex(token, currentSemesterID).catch(() => {})} />
+            return <StateError title="Не удалось загрузить дисциплины" details={lastMainLoadError} onRetry={() => loadIndex(token, currentSemesterID).catch(() => { })} />
         }
 
         if (!disciplines.length) {
@@ -280,25 +322,19 @@ export default function DashboardView({
                     </div>
 
                     <div className="topbar__actions">
-                        <label className="field field--inline semester-picker">
+                        <div className="field field--inline semester-picker">
                             <span>Семестр</span>
-                            <select className="input select" value={currentSemesterID} onChange={handleSemesterChange} disabled={request.index === "loading"}>
-                                {semesters.length === 0 ? (
-                                    <option value="">{request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"}</option>
-                                ) : (
-                                    semesters.map((semester) => (
-                                        <option key={String(semester.ID)} value={String(semester.ID)}>{formatSemesterLabel(semester)}</option>
-                                    ))
-                                )}
-                            </select>
-                        </label>
+                            <DropdownSelect label="Семестр" value={currentSemesterID} options={semesters.map(semester => ({ value: String(semester.ID), label: formatSemesterLabel(semester) }))} onChange={value => handleSemesterChange({ target: { value } })} disabled={request.index === "loading"} placeholder={request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"} />
+                        </div>
                         <button className="btn btn--dark" type="button" onClick={handleRefresh} disabled={request.index === "loading" || request.detail === "loading"}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                                 <path d="M20 11a8 8 0 1 0-2.3 5.6"></path>
                                 <path d="M20 5v6h-6"></path>
                             </svg>
                             Обновить
                         </button>
+
+
                         <button className="btn btn--light logout-button" type="button" onClick={handleLogout} aria-label="Выйти">
                             <span className="action-label">Выйти</span>
                             <svg className="logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -318,6 +354,10 @@ export default function DashboardView({
                             className={`tab ${mainNav === item.id ? "tab-active" : ""}`.trim()}
                             aria-current={mainNav === item.id ? "page" : undefined}
                             onClick={() => {
+                                if (mainNav === item.id && mobileView === "detail") {
+                                    handleBackToList()
+                                    return
+                                }
                                 setMainNav(item.id)
                                 setMobileView("list")
                             }}
@@ -338,7 +378,7 @@ export default function DashboardView({
                                 <h2 className="list__title" id="disciplineListTitle">Список дисциплин</h2>
                                 <span className="badge badge--ember">{String(disciplines.length)}</span>
                             </div>
-                            <div className="card list">{renderDisciplines()}</div>
+                            <SlidingCapsule className="card list" activeKey={selectedDisciplineID} layoutKey={`${currentSemesterID}:${request.index}:${mobileView}:${active}`}>{renderDisciplines()}</SlidingCapsule>
                         </section>
 
                         <TodayCard active={active} />

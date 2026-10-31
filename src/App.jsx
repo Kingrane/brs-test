@@ -22,6 +22,7 @@ export default function App() {
     const [loginStatus, setLoginStatus] = useState({ message: "", type: "" })
     const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
     const [authReady, setAuthReady] = useState(false)
+    const [startupSuccess, setStartupSuccess] = useState(false)
     const [isLoggingIn, setIsLoggingIn] = useState(false)
 
     const [semesters, setSemesters] = useState([])
@@ -39,6 +40,7 @@ export default function App() {
 
     const detailCacheRef = useRef(new Map())
     const detailRequestRef = useRef(0)
+    const autoLoginRef = useRef(null)
 
     const selectedDiscipline = useMemo(
         () => disciplines.find((discipline) => String(discipline.ID) === String(selectedDisciplineID)) || null,
@@ -184,14 +186,16 @@ export default function App() {
             setStoredAuth(authToken, rememberFlag)
             setView("dashboard")
             setLoginStatus({ message: "", type: "" })
+            return true
         } catch (error) {
             setRequest((prev) => ({ ...prev, semesters: prev.semesters === "loading" ? "error" : prev.semesters }))
             if (isAuto) {
                 setView("login")
                 setLoginStatus({ message: "Не удалось автоматически войти. Проверьте токен.", type: "error" })
-                return
+                return false
             }
             setLoginStatus({ message: `Ошибка входа: ${error.message}`, type: "error" })
+            return false
         } finally {
             setIsLoggingIn(false)
         }
@@ -273,6 +277,7 @@ export default function App() {
     }
 
     useEffect(() => {
+        let cancelled = false
         const storedAuth = getStoredAuth()
         if (!storedAuth.token) {
             setAuthReady(true)
@@ -283,11 +288,24 @@ export default function App() {
         setRemember(storedAuth.remember)
         if (storedAuth.remember) {
             setLoginStatus({ message: "Выполняется автоматический вход...", type: "" })
-            runLogin(storedAuth.token, true, true).finally(() => setAuthReady(true))
+            if (!autoLoginRef.current) autoLoginRef.current = runLogin(storedAuth.token, true, true)
+            autoLoginRef.current.then(success => {
+                if (cancelled) return
+                if (success) setStartupSuccess(true)
+                else setAuthReady(true)
+            })
         } else {
             setAuthReady(true)
         }
+        return () => { cancelled = true }
     }, [])
+
+    useEffect(() => {
+        if (!startupSuccess) return
+        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 640
+        const timer = window.setTimeout(() => setAuthReady(true), delay)
+        return () => window.clearTimeout(timer)
+    }, [startupSuccess])
 
     const mergedTeachers = useMemo(() => {
         if (!selectedDiscipline) return []
@@ -311,11 +329,16 @@ export default function App() {
 
     if (!authReady) {
         return (
-            <main className="startup-loader" aria-live="polite" aria-busy="true">
+            <main className={`startup-loader ${startupSuccess ? "startup-loader--success" : ""}`.trim()} aria-live="polite" aria-busy={!startupSuccess}>
                 <img className="startup-loader-logo" src="/sfedu.svg" alt="Южный федеральный университет" />
-                <span className="startup-loader-spinner" aria-hidden="true" />
-                <p>Выполняется вход...</p>
-                <small>Проверяем сохранённый токен</small>
+                <span className="startup-loader-spinner" aria-hidden="true">
+                    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="16" cy="16" r="14" />
+                        <path d="m10 16 4 4 8-8" />
+                    </svg>
+                </span>
+                <p>{startupSuccess ? "Вы вошли" : "Выполняется вход..."}</p>
+                <small>{startupSuccess ? "Всё готово" : "Проверяем сохранённый токен"}</small>
             </main>
         )
     }

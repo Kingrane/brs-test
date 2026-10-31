@@ -23,6 +23,8 @@
     --paper: #f4f4f5;
     --subtle: #fafafa;
     --snow: #ffffff;
+    --scroll-thumb: #5c9d96;
+    --scroll-track: #edf5f3;
 
     /* Accent */
     --ember: #ff5a00;
@@ -433,6 +435,123 @@ svg {
     cursor: not-allowed;
 }
 
+/* Custom select popovers — above the sticky header, below dialogs. */
+.dropdown-select {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    text-align: left;
+    background-image: none;
+}
+
+.select.dropdown-select {
+    padding-right: 12px;
+}
+
+.dropdown-select__value {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dropdown-select__chevron {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--fog);
+    transition: transform 180ms var(--ease);
+}
+
+.dropdown-select[aria-expanded="true"] {
+    border-color: var(--g-good);
+}
+
+.dropdown-select[aria-expanded="true"] .dropdown-select__chevron {
+    transform: rotate(180deg);
+}
+
+.select-menu {
+    position: fixed;
+    z-index: 60;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+    border: 1px solid var(--cloud);
+    border-radius: 20px;
+    background: var(--snow);
+    box-shadow: 0 12px 32px rgba(24, 24, 27, 0.1), 0 2px 6px rgba(24, 24, 27, 0.04);
+    animation: dropdown-reveal 260ms var(--ease) both;
+}
+
+.select-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-height: 40px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.4;
+    color: var(--steel);
+    cursor: pointer;
+    overflow-wrap: anywhere;
+    transition: background 140ms var(--ease), color 140ms var(--ease);
+}
+
+.select-option--focused {
+    color: var(--obsidian);
+    background: var(--paper);
+}
+
+.select-option[aria-selected="true"] {
+    color: var(--g-good);
+    background: var(--g-good-soft);
+    font-weight: 600;
+}
+
+.select-option>svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+
+html,
+.select-menu,
+.sched-scroll,
+.table-wrap {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+html::-webkit-scrollbar,
+.select-menu::-webkit-scrollbar,
+.sched-scroll::-webkit-scrollbar,
+.table-wrap::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+html::-webkit-scrollbar-track,
+.select-menu::-webkit-scrollbar-track,
+.sched-scroll::-webkit-scrollbar-track,
+.table-wrap::-webkit-scrollbar-track {
+    background: var(--scroll-track);
+    border-radius: var(--r-pill);
+}
+
+html::-webkit-scrollbar-thumb,
+.select-menu::-webkit-scrollbar-thumb,
+.sched-scroll::-webkit-scrollbar-thumb,
+.table-wrap::-webkit-scrollbar-thumb {
+    background: var(--scroll-thumb);
+    border: 2px solid var(--scroll-track);
+    border-radius: var(--r-pill);
+}
+
 .check {
     display: inline-flex;
     align-items: center;
@@ -498,7 +617,7 @@ svg {
 }
 
 .badge--ember {
-    background: var(--ember2);
+    background: var(--g-bad-soft);
     color: var(--obsidian);
     min-width: 26px;
     font-weight: 600;
@@ -544,8 +663,10 @@ svg {
     position: sticky;
     top: 0;
     z-index: 50;
-    background: var(--snow);
-    border-bottom: 1px solid transparent;
+    background: rgba(255, 255, 255, 0.82);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(228, 228, 231, 0.65);
 }
 
 .topbar__in {
@@ -689,6 +810,17 @@ svg {
 
 .list {
     padding: 10px 14px;
+}
+
+.list .capsule-indicator {
+    border: 1px solid var(--cloud);
+    border-radius: var(--r-row);
+    background: var(--paper);
+    transform-origin: top left;
+}
+
+.list .row>span {
+    animation: panel-reveal 280ms var(--ease) var(--row-delay, 0ms) both;
 }
 
 .list__head {
@@ -1875,12 +2007,37 @@ td.mono {
 }
 
 .startup-loader-spinner {
-    width: 22px;
-    height: 22px;
+    position: relative;
+    width: 32px;
+    height: 32px;
+    color: var(--g-good);
+}
+
+.startup-loader-spinner::before {
+    content: "";
+    position: absolute;
+    inset: 1px;
     border: 2px solid var(--mist);
     border-top-color: var(--obsidian);
     border-radius: 50%;
     animation: spin 720ms linear infinite;
+    transition: opacity 120ms var(--ease);
+}
+
+.startup-loader-spinner svg {
+    opacity: 0;
+}
+
+.startup-loader-spinner circle {
+    fill: var(--g-good-soft);
+}
+
+.startup-loader--success .startup-loader-spinner::before {
+    opacity: 0;
+}
+
+.startup-loader--success .startup-loader-spinner svg {
+    animation: success-reveal 280ms var(--ease) both;
 }
 
 .startup-loader p {
@@ -2021,14 +2178,14 @@ td.mono {
 
 .sched-matrix th,
 .sched-matrix td {
-    padding: 10px;
+    padding: 8px;
     border-right: 1px solid var(--cloud);
     border-bottom: 1px solid var(--cloud);
     background: var(--snow);
 }
 
 .sched-matrix thead th {
-    height: 52px;
+    height: 46px;
     font-size: 13px;
     font-weight: 600;
     text-align: center;
@@ -2089,8 +2246,8 @@ td.mono {
 
 .sched-cell-empty {
     display: block;
-    min-height: 36px;
-    padding: 10px;
+    min-height: 24px;
+    padding: 6px;
     text-align: center;
     color: var(--ash);
 }
@@ -2108,7 +2265,7 @@ td.mono {
 }
 
 .sched-lesson {
-    padding: 18px;
+    padding: 14px 16px;
     border: 1px solid #e4e4e7;
     border-radius: 22px;
     background: var(--subtle);
@@ -2122,8 +2279,8 @@ td.mono {
 }
 
 .sched-lesson--compact+.sched-lesson--compact {
-    margin-top: 12px;
-    padding-top: 12px;
+    margin-top: 8px;
+    padding-top: 8px;
     border-top: 1px solid var(--cloud);
 }
 
@@ -2131,8 +2288,8 @@ td.mono {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding-bottom: 14px;
-    margin-bottom: 14px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
     border-bottom: 1px solid var(--cloud);
     font-size: 16px;
     font-weight: 600;
@@ -2159,7 +2316,11 @@ td.mono {
     align-items: center;
     flex-wrap: wrap;
     gap: 4px 6px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+}
+
+.sched-lesson-meta:empty {
+    display: none;
 }
 
 .sched-badge {
@@ -2194,24 +2355,29 @@ td.mono {
 
 .sched-teacher {
     font-size: 12px;
-    line-height: 1.4;
+    line-height: 1.35;
     color: var(--steel);
     overflow-wrap: anywhere;
 }
 
 .sched-subject-group+.sched-subject-group {
-    margin-top: 12px;
+    margin-top: 8px;
 }
 
 .sched-teaching,
 .sched-subgroups {
-    margin-top: 7px;
+    margin-top: 5px;
 }
 
 .sched-subgroups {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
     gap: 8px;
+}
+
+.sched-lesson--compact .sched-subgroups {
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+    gap: 6px;
 }
 
 .sched-subgroups .sched-teaching-entry:not(:first-child) {
@@ -2286,6 +2452,31 @@ td.mono {
         opacity: 0;
         transform: translate3d(0, 8px, 0);
     }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes dropdown-reveal {
+    from {
+        opacity: 0;
+        transform: translate3d(0, var(--menu-offset, -12px), 0);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes success-reveal {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+
     to {
         opacity: 1;
         transform: none;
@@ -2297,6 +2488,7 @@ td.mono {
         opacity: 0;
         transform: translate3d(calc(var(--day-direction, 1) * 12px), 0, 0);
     }
+
     to {
         opacity: 1;
         transform: none;
@@ -2448,6 +2640,12 @@ td.mono {
         border-color: transparent;
         background-position: right center;
         color: var(--fog);
+    }
+
+    .semester-picker .dropdown-select {
+        background-image: none;
+        gap: 8px;
+        padding-right: 4px;
     }
 
     .logout-button {
@@ -2602,6 +2800,11 @@ td.mono {
     .row--active {
         background: transparent;
         border-color: transparent;
+    }
+
+    .list .capsule-indicator {
+        border-color: transparent;
+        border-radius: 12px;
     }
 
     .row--active .row__title {
@@ -2810,7 +3013,7 @@ td.mono {
     }
 
     .sched-day-panel>.sched-lesson+.sched-lesson {
-        margin-top: 12px;
+        margin-top: 10px;
     }
 
     .sched-heading {
@@ -2969,6 +3172,35 @@ td.mono {
         animation-iteration-count: 1 !important;
         transition-duration: 0.001ms !important;
         scroll-behavior: auto !important;
+    }
+}
+
+.select-menu[data-state="open"] {
+    animation: select-in 160ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.select-menu[data-state="closed"] {
+    animation: select-out 140ms ease forwards;
+    pointer-events: none;
+}
+
+@keyframes select-in {
+    from {
+        opacity: 0;
+        transform: translateY(var(--menu-offset)) scale(.98);
+    }
+}
+
+@keyframes select-out {
+    to {
+        opacity: 0;
+        transform: translateY(var(--menu-offset)) scale(.98);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .select-menu {
+        animation: none !important;
     }
 }
 

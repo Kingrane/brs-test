@@ -18,6 +18,7 @@ export default function DisciplineCard({ discipline, mark, active, index, teache
             data-id={id}
             type="button"
             aria-current={active ? "true" : undefined}
+            style={{ "--row-delay": `${index * 35}ms` }}
             onClick={onClick}
         >
             <span className="row__num" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span>
