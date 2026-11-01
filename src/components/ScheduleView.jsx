@@ -5,6 +5,7 @@ import StateError from "./StateError"
 import ScheduleLessonCard from "./ScheduleLessonCard"
 import SlidingCapsule from "./SlidingCapsule"
 import DropdownSelect from "./DropdownSelect"
+import RefreshIcon from "./RefreshIcon"
 import { fetchScheduleGrades, fetchGroupsForGrade, fetchScheduleForGroup, fetchScheduleTimeList } from "../api/schedule"
 import {
     DAY_NAMES,
@@ -247,10 +248,8 @@ export default function ScheduleView() {
                             </button>
                         ))}
                     </SlidingCapsule>
-                    <button className="btn btn--light sched-refresh" type="button" onClick={handleRetry} disabled={request === "loading"} aria-label="Обновить расписание">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M20 11a8 8 0 1 0-2.3 5.6M20 5v6h-6" />
-                        </svg>
+                    <button className="btn btn--light sched-refresh" type="button" onClick={handleRetry} disabled={request === "loading"} aria-busy={request === "loading"} aria-label={request === "loading" ? "Обновление расписания…" : "Обновить расписание"}>
+                        <RefreshIcon />
                         <span>Обновить</span>
                     </button>
                 </div>

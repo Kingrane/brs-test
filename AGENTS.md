@@ -72,6 +72,8 @@ src/                           # ВЕБ-ФРОНТЕНД (Vite + React 19, JSX)
     ConfirmDialog.jsx          # диалог подтверждения (выход)
     SlidingCapsule.jsx         # общий скользящий индикатор навигации/вкладок/фильтров, FLIP + reduced motion
     DropdownSelect.jsx         # combobox для семестра/курса/группы, portal-listbox, клавиатура и выезд меню
+    RefreshIcon.jsx            # общий SVG обновления без обрезания; вращение через aria-busy кнопки
+    StartupIndicator.jsx       # SVG-дуга morph в галочку за 260ms, RAF cleanup и reduced motion
     ScheduleView.jsx           # курс -> группа -> неделя; desktop время × 6 дней, mobile выбранный день
     ScheduleLessonCard.jsx     # ячейка/карточка пары; все предметы, преподаватели, аудитории и реальные подгруппы
 
@@ -166,7 +168,8 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
 - **Кэш**: детали дисциплины кэшируются в `useRef(new Map())` по ключу `semesterID:disciplineID` (`App.jsx`);
   расписание кэшируется in-memory promise-кэшем в `src/api/schedule.js`, общим для `ScheduleView` и `TodayCard`.
 - **Мобильный возврат:** открытие дисциплины на `<=768px` добавляет один шаг browser history (`brsDetail`: ID + семестр, без токена). Back/«К списку» возвращают список, скролл и фокус; Forward снова открывает детали. Следующий Back из списка не блокируется. Смена раздела/семестра и выход расходуют активный шаг деталей.
-- **Автовход:** один общий promise на старт, в том числе при StrictMode; после успешной загрузки круг с галочкой на 640ms (120ms при reduced motion), затем dashboard. Ручной вход/ошибки без дополнительной паузы; таймер очищается.
+- **Автовход:** один общий promise на старт, в том числе при StrictMode; после успешной загрузки SVG-дуга становится галочкой за 260ms (`StartupIndicator`), затем dashboard через 420ms от успеха (120ms при reduced motion, morph пропускается). Ручной вход/ошибки без дополнительной паузы; таймер и RAF очищаются.
+- **Обновление:** `DashboardView` держит `isRefreshing` на всю цепочку `handleRefresh`, сбрасывает в finally; кнопка и семестр блокируются до завершения. Общий `RefreshIcon` в шапке и расписании вращается при `aria-busy=true`, кнопка остаётся читаемой (opacity 0.85); reduced motion без вращения. Tap-highlight кнопок отключён без потери keyboard focus.
 - **Сегодня** (`src/components/TodayCard.jsx`, `src/utils/today.js`): группа берётся из `schedule_group_id`;
   без группы карточка скрыта, при `active=false` нет запросов и таймера. Время обновляется раз в минуту.
   Фильтр недели ручной, по умолчанию `all`, не персистится; в `all` условные `upper`/`lower` не получают

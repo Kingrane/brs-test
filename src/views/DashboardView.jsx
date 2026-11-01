@@ -11,6 +11,7 @@ import ScheduleView from "../components/ScheduleView"
 import TodayCard from "../components/TodayCard"
 import SlidingCapsule from "../components/SlidingCapsule"
 import DropdownSelect from "../components/DropdownSelect"
+import RefreshIcon from "../components/RefreshIcon"
 import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
 
 const MAIN_NAV = [
@@ -56,6 +57,17 @@ export default function DashboardView({
     const [mobileView, setMobileView] = React.useState("list")
     const listScrollRef = React.useRef(0)
     const detailHistoryRef = React.useRef(false)
+    const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+    const refresh = async () => {
+        if (isRefreshing) return
+        setIsRefreshing(true)
+        try {
+            await handleRefresh()
+        } finally {
+            setIsRefreshing(false)
+        }
+    }
 
     const restoreList = () => {
         setMobileView("list")
@@ -324,15 +336,13 @@ export default function DashboardView({
                     <div className="topbar__actions">
                         <div className="field field--inline semester-picker">
                             <span>Семестр</span>
-                            <DropdownSelect label="Семестр" value={currentSemesterID} options={semesters.map(semester => ({ value: String(semester.ID), label: formatSemesterLabel(semester) }))} onChange={value => handleSemesterChange({ target: { value } })} disabled={request.index === "loading"} placeholder={request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"} />
+                            <DropdownSelect label="Семестр" value={currentSemesterID} options={semesters.map(semester => ({ value: String(semester.ID), label: formatSemesterLabel(semester) }))} onChange={value => handleSemesterChange({ target: { value } })} disabled={isRefreshing || request.index === "loading"} placeholder={request.semesters === "loading" ? "Загрузка..." : "Семестры не найдены"} />
                         </div>
-                        <button className="btn btn--dark" type="button" onClick={handleRefresh} disabled={request.index === "loading" || request.detail === "loading"}>
-                            <svg viewBox="0 0 26 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M20 11a8 8 0 1 0-2.3 5.6"></path>
-                                <path d="M20 5v6h-6"></path>
-                            </svg>
+                        <button className="btn btn--dark" type="button" onClick={refresh} disabled={isRefreshing || request.index === "loading" || request.detail === "loading"} aria-busy={isRefreshing} aria-label={isRefreshing ? "Обновление данных…" : "Обновить"}>
+                            <RefreshIcon />
                             Обновить
                         </button>
+
 
 
                         <button className="btn btn--light logout-button" type="button" onClick={handleLogout} aria-label="Выйти">

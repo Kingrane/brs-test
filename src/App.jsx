@@ -5,6 +5,7 @@ import { getIndexTeachersForDiscipline } from "./utils/formatters"
 import LoginView from "./views/LoginView"
 import DashboardView from "./views/DashboardView"
 import ConfirmDialog from "./components/ConfirmDialog"
+import StartupIndicator from "./components/StartupIndicator"
 
 const INITIAL_REQUEST = {
     semesters: "idle",
@@ -302,7 +303,7 @@ export default function App() {
 
     useEffect(() => {
         if (!startupSuccess) return
-        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 640
+        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 420
         const timer = window.setTimeout(() => setAuthReady(true), delay)
         return () => window.clearTimeout(timer)
     }, [startupSuccess])
@@ -331,12 +332,7 @@ export default function App() {
         return (
             <main className={`startup-loader ${startupSuccess ? "startup-loader--success" : ""}`.trim()} aria-live="polite" aria-busy={!startupSuccess}>
                 <img className="startup-loader-logo" src="/sfedu.svg" alt="Южный федеральный университет" />
-                <span className="startup-loader-spinner" aria-hidden="true">
-                    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="16" cy="16" r="14" />
-                        <path d="m10 16 4 4 8-8" />
-                    </svg>
-                </span>
+                <StartupIndicator success={startupSuccess} />
                 <p>{startupSuccess ? "Вы вошли" : "Выполняется вход..."}</p>
                 <small>{startupSuccess ? "Всё готово" : "Проверяем сохранённый токен"}</small>
             </main>

@@ -127,6 +127,7 @@ button {
     cursor: pointer;
     -webkit-appearance: none;
     appearance: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
 input,
@@ -282,6 +283,21 @@ svg {
     width: 15px;
     height: 15px;
     flex: none;
+}
+
+.btn .refresh-icon {
+    width: 16px;
+    height: 16px;
+    overflow: visible;
+}
+
+.btn[aria-busy="true"] .refresh-icon {
+    animation: spin 800ms linear infinite;
+}
+
+.btn[aria-busy="true"]:disabled {
+    cursor: progress;
+    opacity: 0.85;
 }
 
 .btn:active {
@@ -2007,37 +2023,30 @@ td.mono {
 }
 
 .startup-loader-spinner {
-    position: relative;
     width: 32px;
     height: 32px;
+    color: var(--obsidian);
+    transition: color 180ms var(--ease);
+}
+
+.startup-loader-spinner__arc {
+    transform-origin: 16px 16px;
+    animation: spin 720ms linear infinite;
+}
+
+.startup-loader-spinner__ring {
+    stroke: var(--mist);
+    fill: transparent;
+    transition: stroke 180ms var(--ease), fill 180ms var(--ease);
+}
+
+.startup-loader--success .startup-loader-spinner {
     color: var(--g-good);
 }
 
-.startup-loader-spinner::before {
-    content: "";
-    position: absolute;
-    inset: 1px;
-    border: 2px solid var(--mist);
-    border-top-color: var(--obsidian);
-    border-radius: 50%;
-    animation: spin 720ms linear infinite;
-    transition: opacity 120ms var(--ease);
-}
-
-.startup-loader-spinner svg {
-    opacity: 0;
-}
-
-.startup-loader-spinner circle {
+.startup-loader--success .startup-loader-spinner__ring {
+    stroke: var(--g-good);
     fill: var(--g-good-soft);
-}
-
-.startup-loader--success .startup-loader-spinner::before {
-    opacity: 0;
-}
-
-.startup-loader--success .startup-loader-spinner svg {
-    animation: success-reveal 280ms var(--ease) both;
 }
 
 .startup-loader p {
@@ -2471,18 +2480,6 @@ td.mono {
     }
 }
 
-@keyframes success-reveal {
-    from {
-        opacity: 0;
-        transform: scale(0.8);
-    }
-
-    to {
-        opacity: 1;
-        transform: none;
-    }
-}
-
 @keyframes day-reveal {
     from {
         opacity: 0;
@@ -2743,7 +2740,7 @@ td.mono {
     }
 
     .list {
-        padding: 8px 20px;
+        padding: 8px;
         border-color: #e4e4e7;
         border-radius: 32px;
     }
@@ -2768,14 +2765,14 @@ td.mono {
 
     .row {
         grid-template-columns: minmax(0, 1fr) auto;
-        padding: 18px 0;
+        padding: 18px 10px;
         gap: 14px;
         border-radius: 12px;
     }
 
     .row+.row::before {
-        left: 0;
-        right: 0;
+        left: 10px;
+        right: 10px;
     }
 
     .row__title {
@@ -3104,7 +3101,7 @@ td.mono {
     }
 
     .list {
-        padding: 8px 18px;
+        padding: 8px;
     }
 
     .list,
