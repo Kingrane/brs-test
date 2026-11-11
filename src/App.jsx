@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { ENDPOINTS, fetchJson } from "./api/client"
-import { getStoredAuth, setStoredAuth, isLikelyToken } from "./utils/storage"
+import { getStoredAuth, setStoredAuth, isLikelyToken, readCache, writeCache, clearCache } from "./utils/storage"
 import { getIndexTeachersForDiscipline } from "./utils/formatters"
 import LoginView from "./views/LoginView"
 import DashboardView from "./views/DashboardView"
@@ -14,28 +14,35 @@ const INITIAL_REQUEST = {
     globalEvents: "idle"
 }
 
+// Read once, before React renders: a cached snapshot lets the very first frame
+// show real data instead of a loader.
+const bootAuth = getStoredAuth()
+const bootCache = bootAuth.token && bootAuth.remember ? readCache(bootAuth.token) : null
+
 export default function App() {
-    const [tokenInput, setTokenInput] = useState("")
-    const [token, setToken] = useState("")
-    const [remember, setRemember] = useState(false)
-    const [view, setView] = useState("login")
+    const [tokenInput, setTokenInput] = useState(bootAuth.token || "")
+    const [token, setToken] = useState(bootCache ? bootAuth.token : "")
+    const [remember, setRemember] = useState(Boolean(bootAuth.remember))
+    const [view, setView] = useState(bootCache ? "dashboard" : "login")
     const [mainNav, setMainNav] = useState("disciplines") // "disciplines" | "events" | "schedule"
     const [loginStatus, setLoginStatus] = useState({ message: "", type: "" })
     const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
-    const [authReady, setAuthReady] = useState(false)
+    const [authReady, setAuthReady] = useState(Boolean(bootCache) || !bootAuth.token)
     const [startupSuccess, setStartupSuccess] = useState(false)
     const [isLoggingIn, setIsLoggingIn] = useState(false)
 
-    const [semesters, setSemesters] = useState([])
-    const [currentSemesterID, setCurrentSemesterID] = useState("")
-    const [recordbookID, setRecordbookID] = useState("")
-    const [disciplines, setDisciplines] = useState([])
-    const [marks, setMarks] = useState({})
-    const [teachersMap, setTeachersMap] = useState({})
+    const [semesters, setSemesters] = useState(bootCache?.semesters || [])
+    const [currentSemesterID, setCurrentSemesterID] = useState(bootCache?.semesterID || "")
+    const [recordbookID, setRecordbookID] = useState(bootCache?.recordbookID || "")
+    const [disciplines, setDisciplines] = useState(bootCache?.disciplines || [])
+    const [marks, setMarks] = useState(bootCache?.marks || {})
+    const [teachersMap, setTeachersMap] = useState(bootCache?.teachersMap || {})
     const [selectedDisciplineID, setSelectedDisciplineID] = useState("")
     const [globalEventsData, setGlobalEventsData] = useState(null)
     const [debugLog, setDebugLog] = useState({})
-    const [request, setRequest] = useState(INITIAL_REQUEST)
+    const [request, setRequest] = useState(() => bootCache
+        ? { ...INITIAL_REQUEST, semesters: "success", index: "success" }
+        : INITIAL_REQUEST)
     const [lastMainLoadError, setLastMainLoadError] = useState("")
     const [activeTab, setActiveTab] = useState("grade")
 
@@ -66,11 +73,10 @@ export default function App() {
         const list = Array.isArray(response) ? response : Object.values(response)
         list.sort((a, b) => Number(b.ID || 0) - Number(a.ID || 0))
 
-        const nextSemester = list[0] ? String(list[0].ID) : ""
         setSemesters(list)
-        setCurrentSemesterID(nextSemester)
         setRequest((prev) => ({ ...prev, semesters: "success" }))
-        return nextSemester
+        writeCache(authToken, { semesters: list }, remember)
+        return list
     }
 
     const loadGlobalEvents = async (authToken, semesterID, rId) => {
@@ -88,7 +94,7 @@ export default function App() {
         }
     }
 
-    const loadIndex = async (authToken, semesterID) => {
+    const loadIndex = async (authToken, semesterID, options = {}) => {
         if (!semesterID) {
             setDisciplines([])
             setMarks({})
@@ -97,7 +103,9 @@ export default function App() {
             return ""
         }
 
-        setRequest((prev) => ({ ...prev, index: "loading" }))
+        // Silent refresh keeps the cached list on screen instead of flashing a loader.
+        const silent = Boolean(options.silent)
+        if (!silent) setRequest((prev) => ({ ...prev, index: "loading" }))
         try {
             const json = await fetchJson(ENDPOINTS.index, {
                 token: authToken,
@@ -106,7 +114,7 @@ export default function App() {
             const response = json?.response || {}
             const nextDisciplines = Array.isArray(response.Disciplines) ? response.Disciplines : []
             const rId = response.RecordbookID || response.RecordBook || response.Student?.RecordbookID || response.Student?.RecordBook || response.Student?.ID || ""
-            
+
             setDisciplines(nextDisciplines)
             setMarks(response.Marks || {})
             setTeachersMap(response.Teachers || {})
@@ -120,9 +128,16 @@ export default function App() {
 
             setRequest((prev) => ({ ...prev, index: "success" }))
             setLastMainLoadError("")
+            writeCache(authToken, {
+                semesterID: String(semesterID),
+                recordbookID: String(rId),
+                disciplines: nextDisciplines,
+                marks: response.Marks || {},
+                teachersMap: response.Teachers || {}
+            }, remember)
             return String(rId)
         } catch (error) {
-            setRequest((prev) => ({ ...prev, index: "error" }))
+            setRequest((prev) => ({ ...prev, index: silent ? prev.index : "error" }))
             setLastMainLoadError(error.message)
             throw error
         }
@@ -167,15 +182,68 @@ export default function App() {
         }
     }
 
-    const loadDashboardData = async (authToken) => {
+    const loadDashboardData = async (authToken, options = {}) => {
         setLastMainLoadError("")
-        const semesterID = await loadSemesters(authToken)
-        const rId = await loadIndex(authToken, semesterID)
-        await loadGlobalEvents(authToken, semesterID, rId)
+        const silent = Boolean(options.silent)
+        const preferredSemesterID = silent ? String(options.semesterID || "") : ""
+
+        if (!preferredSemesterID) {
+            const list = await loadSemesters(authToken)
+            const semesterID = list[0] ? String(list[0].ID) : ""
+            setCurrentSemesterID(semesterID)
+            const rId = await loadIndex(authToken, semesterID)
+            loadGlobalEvents(authToken, semesterID, rId)
+            return
+        }
+
+        // We already know the semester from the cache, so the index request
+        // does not have to wait for the semester list.
+        const [listResult, indexResult] = await Promise.allSettled([
+            loadSemesters(authToken),
+            loadIndex(authToken, preferredSemesterID, { silent: true })
+        ])
+
+        if (listResult.status === "rejected") {
+            if (indexResult.status === "rejected") throw listResult.reason
+            loadGlobalEvents(authToken, preferredSemesterID, recordbookID)
+            return
+        }
+
+        const newestSemesterID = listResult.value[0] ? String(listResult.value[0].ID) : ""
+
+        // A brand new semester appeared upstream — swap quietly instead of flashing a loader.
+        if (newestSemesterID && newestSemesterID !== preferredSemesterID) {
+            setSelectedDisciplineID("")
+            const rId = await loadIndex(authToken, newestSemesterID, { silent: true })
+            setCurrentSemesterID(newestSemesterID)
+            loadGlobalEvents(authToken, newestSemesterID, rId)
+            return
+        }
+
+        setCurrentSemesterID(newestSemesterID || preferredSemesterID)
+        if (indexResult.status === "rejected") throw indexResult.reason
+        loadGlobalEvents(authToken, newestSemesterID || preferredSemesterID, recordbookID)
     }
 
-    const runLogin = async (authToken, rememberFlag, isAuto = false) => {
-        setIsLoggingIn(true)
+    const resetDashboardData = () => {
+        detailRequestRef.current += 1
+        setSemesters([])
+        setCurrentSemesterID("")
+        setRecordbookID("")
+        setDisciplines([])
+        setMarks({})
+        setTeachersMap({})
+        setSelectedDisciplineID("")
+        setGlobalEventsData(null)
+        setLastMainLoadError("")
+        setRequest(INITIAL_REQUEST)
+    }
+
+    const runLogin = async (authToken, rememberFlag, isAuto = false, options = {}) => {
+        // A silent run refreshes in the background over cached data: no button state,
+        // no loader, and a network failure must not throw the user back to login.
+        const silent = Boolean(options.silent)
+        if (!silent) setIsLoggingIn(true)
         setToken(authToken)
         setRemember(rememberFlag)
         if (!isAuto) {
@@ -183,22 +251,31 @@ export default function App() {
         }
 
         try {
-            await loadDashboardData(authToken)
+            await loadDashboardData(authToken, { silent, semesterID: silent ? currentSemesterID : "" })
             setStoredAuth(authToken, rememberFlag)
             setView("dashboard")
             setLoginStatus({ message: "", type: "" })
             return true
         } catch (error) {
+            const tokenRejected = error?.status === 401 || error?.status === 403
+            if (silent && !tokenRejected) {
+                setLastMainLoadError(error.message)
+                return false
+            }
+
             setRequest((prev) => ({ ...prev, semesters: prev.semesters === "loading" ? "error" : prev.semesters }))
+            clearCache()
+            detailCacheRef.current.clear()
+            resetDashboardData()
+            setView("login")
             if (isAuto) {
-                setView("login")
                 setLoginStatus({ message: "Не удалось автоматически войти. Проверьте токен.", type: "error" })
                 return false
             }
             setLoginStatus({ message: `Ошибка входа: ${error.message}`, type: "error" })
             return false
         } finally {
-            setIsLoggingIn(false)
+            if (!silent) setIsLoggingIn(false)
         }
     }
 
@@ -218,24 +295,15 @@ export default function App() {
     }
 
     const confirmLogout = () => {
-        detailRequestRef.current += 1
         const storedAuth = getStoredAuth()
         setConfirmLogoutOpen(false)
         setTokenInput(storedAuth.token || tokenInput)
         setToken("")
         setRemember(Boolean(storedAuth.token && storedAuth.remember))
-        setSemesters([])
-        setCurrentSemesterID("")
-        setRecordbookID("")
-        setDisciplines([])
-        setMarks({})
-        setTeachersMap({})
-        setSelectedDisciplineID("")
-        setGlobalEventsData(null)
-        setDebugLog({})
+        clearCache()
         detailCacheRef.current.clear()
-        setRequest(INITIAL_REQUEST)
-        setLastMainLoadError("")
+        resetDashboardData()
+        setDebugLog({})
         setActiveTab("grade")
         setMainNav("disciplines")
         setLoginStatus({ message: "", type: "" })
@@ -278,6 +346,10 @@ export default function App() {
     }
 
     useEffect(() => {
+        // React has committed, so the static splash overlay can go. Done here
+        // (not in requestAnimationFrame) because a hidden tab never paints frames.
+        document.getElementById("boot")?.remove()
+
         let cancelled = false
         const storedAuth = getStoredAuth()
         if (!storedAuth.token) {
@@ -288,10 +360,11 @@ export default function App() {
         setTokenInput(storedAuth.token)
         setRemember(storedAuth.remember)
         if (storedAuth.remember) {
-            setLoginStatus({ message: "Выполняется автоматический вход...", type: "" })
-            if (!autoLoginRef.current) autoLoginRef.current = runLogin(storedAuth.token, true, true)
+            const hasCache = Boolean(bootCache)
+            if (!hasCache) setLoginStatus({ message: "Выполняется автоматический вход...", type: "" })
+            if (!autoLoginRef.current) autoLoginRef.current = runLogin(storedAuth.token, true, true, { silent: hasCache })
             autoLoginRef.current.then(success => {
-                if (cancelled) return
+                if (cancelled || hasCache) return
                 if (success) setStartupSuccess(true)
                 else setAuthReady(true)
             })

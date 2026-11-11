@@ -26,10 +26,10 @@ Primary mission:
 ## Карта репозитория
 
 ```text
-index.html                     # Вход Vite-приложения (ссылается на /src/main.jsx и /styles.css)
+index.html                     # Вход Vite-приложения: статический сплэш + /src/main.jsx
 vite.config.js                 # плагин react, dev-порт 5173, proxy /api -> :3000
 server.js                      # Express: монтирует api/* хендлеры + отдаёт dist/ ИЛИ Vite middleware
-vercel.json                    # buildCommand: npm run build, outputDirectory: dist
+vercel.json                    # buildCommand, outputDirectory dist + Cache-Control для sw/assets/fonts
 
 api/                           # serverless-хендлеры (Vercel) + общие помощники
   _gradeFetch.js               # upstream grade.sfedu.ru: undici, SSL-bypass, таймаут 12s, user-agent
@@ -47,14 +47,16 @@ api/                           # serverless-хендлеры (Vercel) + общи
       events.js                # /events + /student/events: XML -> JSON (fast-xml-parser)
 
 src/                           # ВЕБ-ФРОНТЕНД (Vite + React 19, JSX)
-  main.jsx                     # React root mount (StrictMode)
-  App.jsx                      # auth-поток, состояние, навигация views, кэш деталей (useRef Map)
+  main.jsx                     # React root mount (StrictMode) + import CSS + регистрация /sw.js в PROD
+  styles.css                   # ВЕСЬ CSS (zinc-тема, @font-face Onest); в сборке получает хэш в имени
+  App.jsx                      # auth-поток, состояние, навигация views, кэш деталей (useRef Map),
+                               # boot-гидратация из localStorage, silent-обновление (SWR)
   api/
-    client.js                  # ENDPOINTS (/api/student/*) + fetchJson с debug-логом
+    client.js                  # ENDPOINTS (/api/student/*) + fetchJson с debug-логом и error.status
     schedule.js                # schedule.sfedu.ru ПРЯМО из браузера (без прокси), in-memory кэш
   utils/
     formatters.js              # оценки/проценты/типы дисциплин, имена преподавателей, парсер событий
-    storage.js                 # localStorage auth (grade_token / grade_remember)
+    storage.js                 # localStorage auth + кэш индекса по хэшу токена (readCache/writeCache/clearCache)
     schedule.js                # дни/слоты, parseTimeslot, mergeScheduleData, groupByDay, filterByWeek
     today.js                   # пары текущего дня, сортировка, время/статус и аудитории; без угадывания недели
   views/
@@ -78,9 +80,12 @@ src/                           # ВЕБ-ФРОНТЕНД (Vite + React 19, JSX)
     ScheduleLessonCard.jsx     # ячейка/карточка пары; все предметы, преподаватели, аудитории и реальные подгруппы
 
 public/                        # Vite publicDir (копируется в dist как есть)
-  styles.css                   # ВЕСЬ CSS (zinc-тема; белый мобильный фон)
+  fonts/onest-*.woff2          # self-host Onest (latin + cyrillic, variable 400–700)
+  manifest.webmanifest         # PWA: standalone, старт /, paper/ember
+  sw.js                        # service worker: navigation network-first, assets/fonts cache-first, /api/* не трогает
+  icons/                       # icon-192/512, maskable-512, apple-touch-icon
   favicon.svg / sfedu.svg      # иконки
-  index.html / app.js          # МУСОР: легаси-приложение на htm/React18 (не используется)
+  index.html / app.js          # МУСОР: легаси-приложение на htm/React18 (не используется, ссылается на удалённый styles.css)
 
 docs/
   DESIGN.md                    # адаптации SuperBRS + полный исходный zinc-стильреференс
@@ -154,7 +159,11 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
 ## Web-фронтенд: как устроен
 
 - **Стек**: Vite 8 + `@vitejs/plugin-react`, React 19, JSX. Без сборки-плагинов CSS — vanilla CSS.
-- **Вход**: корневой `index.html` → `src/main.jsx` → `src/App.jsx`. Стили подключены `<link rel="stylesheet" href="/styles.css">` (файл лежит в `public/`).
+- **Вход**: корневой `index.html` → `src/main.jsx` → `src/App.jsx`. CSS импортируется из `main.jsx`
+  (`src/styles.css`), поэтому в сборке получает хэш в имени и кэшируется навсегда. В `index.html` лежит только
+  inline-критический CSS и статический сплэш (`#boot`): первый кадр рисуется до загрузки бандла, а сплэш снимается
+  в `useEffect` после первого коммита React. Шрифт Onest self-hosted (`public/fonts`, `@font-face` в `styles.css`),
+  внешних запросов к `fonts.googleapis.com` нет.
 - **Данные**: `fetchJson` из `src/api/client.js` ходит на относительные `/api/student/*` —
   локально их отдаёт Express (тот же хендлер, что на Vercel), в проде — serverless.
 - **Расписание** (`src/api/schedule.js`): запросы идут **прямо из браузера** на `https://schedule.sfedu.ru/APIv1`
@@ -167,8 +176,20 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
   `buildScheduleRows` добавляет нестандартные начала к слотам API; отличающееся окончание видно в самой ячейке.
 - **Кэш**: детали дисциплины кэшируются в `useRef(new Map())` по ключу `semesterID:disciplineID` (`App.jsx`);
   расписание кэшируется in-memory promise-кэшем в `src/api/schedule.js`, общим для `ScheduleView` и `TodayCard`.
+- **Мгновенный старт (SWR)**: `App.jsx` читает `grade_token` и снимок индекса из localStorage **до** первого рендера
+  (`bootAuth`/`bootCache` на уровне модуля), поэтому с сохранённым токеном dashboard с прошлыми дисциплинами
+  появляется сразу, а сеть догоняет в фоне (`silent`-обновление: без `StateLoading`, без блокировки кнопок).
+  Кэш живёт в `src/utils/storage.js` (`readCache`/`writeCache`/`clearCache`, ключ `brs_cache_v1:<hash токена>`),
+  пишется только при «запомнить» (иначе — в память сессии) и очищается при выходе и при `401/403`.
+  Если сети нет — показывается кэш; если токен отвергнут — сброс и экран входа. При смене семестра upstream
+  новый семестр подменяет кэш молча (`silent`), без мигания списка.
+  `globalEvents` вне критического пути: грузится после индекса и не задерживает старт.
+- **PWA**: `public/manifest.webmanifest` (standalone, иконки + maskable), `public/sw.js` — navigation network-first
+  (свежий HTML всегда выигрывает, кэш только офлайн), `/assets/` и `/fonts/` cache-first (имена хэшированные),
+  `/api/*` не перехватывается и не кэшируется. Регистрация только в PROD и после `load` (`main.jsx`).
+  `vercel.json` ставит `no-cache` на `/sw.js` и `immutable` на `/assets`, `/fonts`.
 - **Мобильный возврат:** открытие дисциплины на `<=768px` добавляет один шаг browser history (`brsDetail`: ID + семестр, без токена). Back/«К списку» возвращают список, скролл и фокус; Forward снова открывает детали. Следующий Back из списка не блокируется. Смена раздела/семестра и выход расходуют активный шаг деталей.
-- **Автовход:** один общий promise на старт, в том числе при StrictMode; после успешной загрузки SVG-дуга становится галочкой за 260ms (`StartupIndicator`), затем dashboard через 420ms от успеха (120ms при reduced motion, morph пропускается). Ручной вход/ошибки без дополнительной паузы; таймер и RAF очищаются.
+- **Автовход:** один общий promise на старт, в том числе при StrictMode. При наличии кэша старт мгновенный: экран-загрузчик не показывается вообще. Без кэша (первый запуск/после очистки) — сплэш `#boot` → `StartupIndicator`: SVG-дуга становится галочкой за 260ms, затем dashboard через 420ms от успеха (120ms при reduced motion, morph пропускается). Ручной вход/ошибки без дополнительной паузы; таймер и RAF очищаются.
 - **Обновление:** `DashboardView` держит `isRefreshing` на всю цепочку `handleRefresh`, сбрасывает в finally; кнопка и семестр блокируются до завершения. Общий `RefreshIcon` в шапке и расписании вращается при `aria-busy=true`, кнопка остаётся читаемой (opacity 0.85); reduced motion без вращения. Tap-highlight кнопок отключён без потери keyboard focus.
 - **Сегодня** (`src/components/TodayCard.jsx`, `src/utils/today.js`): группа берётся из `schedule_group_id`;
   без группы карточка скрыта, при `active=false` нет запросов и таймера. Время обновляется раз в минуту.
@@ -212,7 +233,7 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
   интерактивные цели от 40px. `SlidingCapsule` измеряет выбранную кнопку и двигает один индикатор через FLIP
   (Web Animations API), пересчитывает resize/fonts, отменяет анимацию при reduced motion и cleanup.
   Переключения дней направленные, вкладок — короткий reveal; конечные transform сбрасываются в none.
-  Основной CSS-файл `public/styles.css`; debug-панель скрыта атрибутом `hidden`, UX-состояния сохраняются.
+  Основной CSS-файл `src/styles.css` (импорт из `main.jsx`); debug-панель скрыта атрибутом `hidden`, UX-состояния сохраняются.
 - `SlidingCapsule` также двигает подсветку дисциплины с FLIP по ширине/высоте и пересчётом при смене списка/мобильного вида; каскад содержимого строк — шаг 35ms. Шапка sticky с blur 18px. `DropdownSelect` выезжает за 260ms, закрывается по Escape/Tab/внешнему нажатию/внешнему scroll; внутренний scroll не двигает страницу. Teal-scrollbar `#5c9d96`; расписание уплотнено отступами, без уменьшения шрифта/потери записей. Мягкая тень допустима под плавающим меню.
 - Zinc-редизайн касается только web: `BRSApp/` не затронут, backend/API-контракты не меняются.
 
@@ -229,6 +250,12 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
 > **Footgun:** `node server.js` отдаёт `dist/`, ЕСЛИ он существует (server.js:44). Пока `dist/` на диске есть,
 > правки в `src/` и `public/` НЕ подхватятся без `npm run build`. Если нужен живой dev — удалить `dist/`
 > или запускать `vite` напрямую. При конфликте порта `EADDRINUSE` — убить процесс или задать `PORT`.
+
+> **Service worker в dev:** регистрируется только при `import.meta.env.PROD`, поэтому `npx vite` (5173) его не ставит.
+> Но `node server.js` отдаёт собранный `dist/` — это уже прод, и SW в браузере останется активным. Если после
+> правок видно старое поведение: DevTools → Application → Service Workers → Unregister (или Hard reload),
+> плюс очистить Cache Storage `superbrs-*`. Для повторного теста установки (WebAPK) приложение нужно переустановить
+> с рабочего домена — старая закладка без манифеста сама не станет PWA.
 
 ### Mobile (BRSApp/)
 
@@ -265,6 +292,14 @@ Frontend:
 - [ ] Мобильный (`<=768px`) и десктоп проверены.
 - [ ] Русская копия и доменные термины консистентны.
 - [ ] Нет console-ошибок от изменённой логики.
+- [ ] Тёплый старт проверен: с сохранённым токеном список рисуется из кэша до ответа API (без `StateLoading`).
+- [ ] Холодный старт проверен: без кэша сплэш → `StartupIndicator` → dashboard.
+- [ ] Выход и `401/403` очищают `brs_cache_v1:*` и возвращают на экран входа.
+
+PWA / старт:
+- [ ] `/api/*` не попадает в Cache Storage (`superbrs-static-v1`), HTML остаётся network-first.
+- [ ] При смене стратегии SW поднято имя кэша (`superbrs-*-v1`), иначе старые записи не уберутся.
+- [ ] Файлы в `public/fonts` и `public/icons` не переименовывать молча: они раздаются с `immutable`.
 
 Проект:
 - [ ] `node --check` для файлов `api/*` (чистый JS).

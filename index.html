@@ -6,15 +6,119 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="Полнофункциональный клиент Сервиса БРС SFEDU">
     <meta name="theme-color" content="#f4f4f5">
+    <meta name="color-scheme" content="light">
     <title>SFEDU БРС</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <meta name="apple-mobile-web-app-title" content="SuperBRS">
+    <link rel="preload" href="/fonts/onest-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+    <style>
+        /* Critical: painted before any bundle arrives, so the first frame is branded. */
+        :root { color-scheme: light; }
+
+        html,
+        body {
+            margin: 0;
+            background: #f4f4f5;
+        }
+
+        .boot {
+            position: fixed;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            padding: 24px;
+            background: #f4f4f5;
+            text-align: center;
+            font-family: "Onest", "Segoe UI", system-ui, -apple-system, sans-serif;
+        }
+
+        .boot__logo {
+            width: 56px;
+            height: 49px;
+            opacity: 0.85;
+        }
+
+        .boot__title {
+            margin: 0;
+            font-size: 14px;
+            font-weight: 500;
+            line-height: 1.45;
+            color: #18181b;
+        }
+
+        .boot__hint {
+            margin: 0;
+            font-size: 12.5px;
+            line-height: 1.45;
+            color: #71717a;
+        }
+
+        .boot__bar {
+            width: 132px;
+            height: 2px;
+            margin-top: 4px;
+            border-radius: 10000px;
+            background: #ececee;
+            overflow: hidden;
+        }
+
+        .boot__bar::after {
+            content: "";
+            display: block;
+            width: 40%;
+            height: 100%;
+            border-radius: inherit;
+            background: #a1a1aa;
+            animation: boot-slide 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) infinite;
+        }
+
+        @keyframes boot-slide {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(250%); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .boot__bar::after { animation: none; width: 100%; }
+        }
+    </style>
 </head>
 
 <body>
+    <div id="boot" class="boot" role="status" aria-live="polite">
+        <svg class="boot__logo" viewBox="0 0 1000 866.03" aria-hidden="true" focusable="false">
+            <defs>
+                <clipPath id="boot-triangle-clip">
+                    <polygon points="500,0 1000,866.025 0,866.025" />
+                </clipPath>
+            </defs>
+            <g clip-path="url(#boot-triangle-clip)" fill="#e02f1d">
+                <path d="M 385.00 866.03 L -700.00 866.03 L -692.20 729.80 L 385.78 853.00 A 115 115 0 0 1 385.00 866.03 Z" />
+                <path d="M 387.79 839.81 L -671.55 606.37 L -633.64 471.40 L 391.41 828.21 A 115 115 0 0 1 387.79 839.81 Z" />
+                <path d="M 395.94 817.07 L -585.83 342.67 L -518.79 232.06 L 402.36 805.27 A 115 115 0 0 1 395.94 817.07 Z" />
+                <path d="M 409.25 795.36 L -446.85 129.28 L -354.38 23.36 L 418.00 785.27 A 115 115 0 0 1 409.25 795.36 Z" />
+                <path d="M 427.03 777.16 L -261.27 -62.61 L -148.24 -143.71 L 437.87 769.25 A 115 115 0 0 1 427.03 777.16 Z" />
+                <path d="M 448.33 763.30 L -38.99 -205.95 L 89.59 -261.62 L 460.67 757.96 A 115 115 0 0 1 448.33 763.30 Z" />
+                <path d="M 472.17 754.44 L 209.76 -298.37 L 347.53 -324.23 L 485.39 751.94 A 115 115 0 0 1 472.17 754.44 Z" />
+                <path d="M 488.00 751.50 L 531.41 -333.56 L 662.88 -322.84 L 515.61 752.09 A 115 115 0 0 1 488.00 751.50 Z" />
+                <path d="M 526.26 754.02 L 774.02 -302.26 L 900.56 -265.17 L 538.39 757.57 A 115 115 0 0 1 526.26 754.02 Z" />
+                <path d="M 548.41 761.73 L 1005.15 -222.46 L 1121.73 -160.40 L 559.60 767.66 A 115 115 0 0 1 548.41 761.73 Z" />
+                <path d="M 568.57 773.69 L 1215.52 -97.23 L 1316.89 -12.98 L 578.29 781.77 A 115 115 0 0 1 568.57 773.69 Z" />
+                <path d="M 585.86 789.56 L 1395.96 67.89 L 1478.14 170.89 L 593.74 799.40 A 115 115 0 0 1 585.86 789.56 Z" />
+                <path d="M 599.59 808.53 L 1539.23 266.03 L 1598.81 383.69 L 605.30 819.79 A 115 115 0 0 1 599.59 808.53 Z" />
+                <path d="M 609.19 829.91 L 1639.30 489.21 L 1673.79 616.54 L 612.49 842.11 A 115 115 0 0 1 609.19 829.91 Z" />
+                <path d="M 614.30 853.40 L 1692.74 734.32 L 1700.00 866.03 L 615.00 866.03 A 115 115 0 0 1 614.30 853.40 Z" />
+            </g>
+        </svg>
+        <p class="boot__title">SuperBRS</p>
+        <p class="boot__hint">Загружаем данные…</p>
+        <span class="boot__bar" aria-hidden="true"></span>
+    </div>
     <div id="app" class="app-shell"></div>
     <script type="module" src="/src/main.jsx"></script>
 </body>

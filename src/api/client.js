@@ -42,7 +42,9 @@ export async function fetchJson(endpoint, params = {}, onDebug) {
     if (!res.ok) {
         const errMessage = json?.error || json?.message || `HTTP ${res.status}`
         const details = json?.details ? ` (${json.details})` : ""
-        throw new Error(errMessage + details)
+        const error = new Error(errMessage + details)
+        error.status = res.status
+        throw error
     }
 
     return json
