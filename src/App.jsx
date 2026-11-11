@@ -27,7 +27,7 @@ export default function App() {
     const [mainNav, setMainNav] = useState("disciplines") // "disciplines" | "events" | "schedule"
     const [loginStatus, setLoginStatus] = useState({ message: "", type: "" })
     const [confirmLogoutOpen, setConfirmLogoutOpen] = useState(false)
-    const [authReady, setAuthReady] = useState(Boolean(bootCache) || !bootAuth.token)
+    const [authReady, setAuthReady] = useState(!bootAuth.token)
     const [startupSuccess, setStartupSuccess] = useState(false)
     const [isLoggingIn, setIsLoggingIn] = useState(false)
 
@@ -351,6 +351,7 @@ export default function App() {
         document.getElementById("boot")?.remove()
 
         let cancelled = false
+        let beatTimer = 0
         const storedAuth = getStoredAuth()
         if (!storedAuth.token) {
             setAuthReady(true)
@@ -359,25 +360,41 @@ export default function App() {
 
         setTokenInput(storedAuth.token)
         setRemember(storedAuth.remember)
-        if (storedAuth.remember) {
-            const hasCache = Boolean(bootCache)
-            if (!hasCache) setLoginStatus({ message: "Выполняется автоматический вход...", type: "" })
-            if (!autoLoginRef.current) autoLoginRef.current = runLogin(storedAuth.token, true, true, { silent: hasCache })
-            autoLoginRef.current.then(success => {
-                if (cancelled || hasCache) return
-                if (success) setStartupSuccess(true)
-                else setAuthReady(true)
-            })
-        } else {
+        if (!storedAuth.remember) {
             setAuthReady(true)
+            return
         }
-        return () => { cancelled = true }
+
+        const hasCache = Boolean(bootCache)
+        if (hasCache) {
+            // Данные уже готовы из кэша, поэтому сеть старт не задерживает —
+            // но фирменный такт остаётся: дуга крутится ~180 ms, превращается
+            // в галочку и только потом открывается dashboard (~500 ms всего).
+            const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            beatTimer = window.setTimeout(() => setStartupSuccess(true), reduce ? 140 : 180)
+        } else {
+            setLoginStatus({ message: "Выполняется автоматический вход...", type: "" })
+        }
+
+        if (!autoLoginRef.current) autoLoginRef.current = runLogin(storedAuth.token, true, true, { silent: hasCache })
+        autoLoginRef.current.then(success => {
+            if (cancelled || hasCache) return
+            if (success) setStartupSuccess(true)
+            else setAuthReady(true)
+        })
+
+        return () => {
+            cancelled = true
+            if (beatTimer) window.clearTimeout(beatTimer)
+        }
     }, [])
 
     useEffect(() => {
         if (!startupSuccess) return
-        const delay = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 120 : 420
-        const timer = window.setTimeout(() => setAuthReady(true), delay)
+        // Холд после морфа: короткий для reduced motion, чтобы галочка успевала
+        // прочитаться, и совсем короткий при мгновенном старте из кэша.
+        const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        const timer = window.setTimeout(() => setAuthReady(true), reduce ? 120 : 320)
         return () => window.clearTimeout(timer)
     }, [startupSuccess])
 

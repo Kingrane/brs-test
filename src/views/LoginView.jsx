@@ -34,7 +34,7 @@ export default function LoginView({
                         <input
                             className="input mono"
                             id="authToken"
-                            type="password"
+                            type="text"
                             placeholder="Вставьте токен доступа"
                             maxLength="80"
                             autoComplete="off"

@@ -18,7 +18,9 @@ export function buildQuery(params) {
 }
 
 export async function apiGet(url) {
-    const res = await fetch(url)
+    // no-store: оценки никогда не должны приходить из браузерного HTTP-кэша,
+    // иначе «Обновить» покажет тот же ответ, что и до нажатия.
+    const res = await fetch(url, { cache: "no-store" })
     const text = await res.text()
     let json = null
     try {
