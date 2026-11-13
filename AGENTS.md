@@ -151,7 +151,7 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
 | `/api/student/index` | `token`, `SemesterID` | `/api/v1/student` |
 | `/api/student/discipline/journal` | `token`, `id` | `/api/v1/student/discipline/journal` |
 | `/api/student/discipline/subject` | `token`, `id` | `/api/v1/student/discipline/subject` |
-| `/api/student/discipline/events` | `token`, `id`, `recordbookID`, `semesterID` | `/api/v1/../v0/events` (fallback `/student/events`) |
+| `/api/student/discipline/events` | `token`, `recordbook`, необязательный `semester` | `/api/v0/events` |
 | `/api/student/events` | то же | то же (реэкспорт events.js) |
 
 ---
@@ -185,11 +185,20 @@ BRSApp/                        # МОБИЛЬНОЕ ПРИЛОЖЕНИЕ (Expo S
   пишется только при «запомнить» (иначе — в память сессии) и очищается при выходе и при `401/403`.
   Если сети нет — показывается кэш; если токен отвергнут — сброс и экран входа. При смене семестра upstream
   новый семестр подменяет кэш молча (`silent`), без мигания списка.
-  `globalEvents` вне критического пути: грузится после индекса и не задерживает старт.
+  `globalEvents` загружается лениво только при открытии «Событий», старт и открытие дисциплины его не запрашивают.
+- **История событий**: API требует числовой `recordbook` (4–12 цифр), которого нет в ответе индекса.
+  `EventsFeedSetup` принимает личную ссылку на RSS или ID; сохраняется только ID в
+  `brs_recordbook_v1:<hash токена>`. Кэш нормализованных событий живёт 10 минут в памяти и localStorage
+  (`brs_events_v1:<hash токена>:<recordbook>`); явное «Обновить» обходит TTL.
+  Прокси делает один запрос к `/api/v0/events`, разбирает RSS; старые имена `recordbookID`/`semesterID` принимаются как aliases.
+  На desktop — таблица, на `<=768px` — карточки со всеми полями. `AgreementDialog` открывается из истории
+  и общего футера dashboard, использует портал в `document.body`, Escape и возврат фокуса.
 - **PWA**: `public/manifest.webmanifest` (standalone, иконки + maskable), `public/sw.js` — navigation network-first
   (свежий HTML всегда выигрывает, кэш только офлайн), `/assets/` и `/fonts/` cache-first (имена хэшированные),
   `/api/*` не перехватывается и не кэшируется. Регистрация только в PROD и после `load` (`main.jsx`).
   `vercel.json` ставит `no-cache` на `/sw.js` и `immutable` на `/assets`, `/fonts`.
+  Иконки PWA — текущие PNG в `public/icons/`; сплэш использует отдельный знак без плашки
+  `public/app-icon-mark.svg` (64px в React, inline-копия 72px в `index.html`). Кэши SW — `superbrs-*-v2`.
 - **Мобильный возврат:** открытие дисциплины на `<=768px` добавляет один шаг browser history (`brsDetail`: ID + семестр, без токена). Back/«К списку» возвращают список, скролл и фокус; Forward снова открывает детали. Следующий Back из списка не блокируется. Смена раздела/семестра и выход расходуют активный шаг деталей.
 - **Автовход:** один общий promise на старт, в том числе при StrictMode. Анимация `StartupIndicator`
   (дуга → галочка) играет **на каждом запуске**, но с кэшем это короткий фиксированный такт ≈500 ms:
@@ -305,7 +314,7 @@ Frontend:
 - [ ] Выход и `401/403` очищают `brs_cache_v1:*` и возвращают на экран входа.
 
 PWA / старт:
-- [ ] `/api/*` не попадает в Cache Storage (`superbrs-static-v1`), HTML остаётся network-first.
+- [ ] `/api/*` не попадает в Cache Storage (`superbrs-static-v2`), HTML остаётся network-first.
 - [ ] При смене стратегии SW поднято имя кэша (`superbrs-*-v1`), иначе старые записи не уберутся.
 - [ ] Файлы в `public/fonts` и `public/icons` не переименовывать молча: они раздаются с `immutable`.
 

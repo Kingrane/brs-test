@@ -3,7 +3,6 @@ export const ENDPOINTS = {
     index: "/api/student/index",
     journal: "/api/student/discipline/journal",
     subject: "/api/student/discipline/subject",
-    events: "/api/student/discipline/events",
     globalEvents: "/api/student/events",
 }
 

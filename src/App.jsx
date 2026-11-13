@@ -1,7 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from "react"
 import { ENDPOINTS, fetchJson } from "./api/client"
-import { getStoredAuth, setStoredAuth, isLikelyToken, readCache, writeCache, clearCache } from "./utils/storage"
-import { getIndexTeachersForDiscipline } from "./utils/formatters"
+import {
+    getStoredAuth,
+    setStoredAuth,
+    isLikelyToken,
+    readCache,
+    writeCache,
+    clearCache,
+    getStoredRecordbook,
+    setStoredRecordbook,
+    clearStoredRecordbook,
+    parseRecordbookInput,
+    readEventsCache,
+    writeEventsCache,
+    clearEventsCache
+} from "./utils/storage"
+import { getIndexTeachersForDiscipline, parseEventsData } from "./utils/formatters"
 import LoginView from "./views/LoginView"
 import DashboardView from "./views/DashboardView"
 import ConfirmDialog from "./components/ConfirmDialog"
@@ -33,12 +47,12 @@ export default function App() {
 
     const [semesters, setSemesters] = useState(bootCache?.semesters || [])
     const [currentSemesterID, setCurrentSemesterID] = useState(bootCache?.semesterID || "")
-    const [recordbookID, setRecordbookID] = useState(bootCache?.recordbookID || "")
+    const [recordbookID, setRecordbookID] = useState(() => (bootCache ? getStoredRecordbook(bootAuth.token) : ""))
     const [disciplines, setDisciplines] = useState(bootCache?.disciplines || [])
     const [marks, setMarks] = useState(bootCache?.marks || {})
     const [teachersMap, setTeachersMap] = useState(bootCache?.teachersMap || {})
     const [selectedDisciplineID, setSelectedDisciplineID] = useState("")
-    const [globalEventsData, setGlobalEventsData] = useState(null)
+    const [globalEvents, setGlobalEvents] = useState([])
     const [debugLog, setDebugLog] = useState({})
     const [request, setRequest] = useState(() => bootCache
         ? { ...INITIAL_REQUEST, semesters: "success", index: "success" }
@@ -79,19 +93,56 @@ export default function App() {
         return list
     }
 
-    const loadGlobalEvents = async (authToken, semesterID, rId) => {
-        setRequest((prev) => ({ ...prev, globalEvents: "loading" }))
+    const loadGlobalEvents = async (authToken, semesterID, options = {}) => {
+        const recordbook = options.recordbook || recordbookID
+        if (!recordbook) {
+            setRequest((prev) => ({ ...prev, globalEvents: "needs_setup" }))
+            return
+        }
+
+        // A fresh cache means no upstream request at all: the feed is read once
+        // per 10 minutes and on an explicit "Обновить".
+        const cached = readEventsCache(authToken, recordbook)
+        if (cached && !options.force) {
+            setGlobalEvents(cached.items)
+            setRequest((prev) => ({ ...prev, globalEvents: "success" }))
+            return
+        }
+
+        if (!cached) setRequest((prev) => ({ ...prev, globalEvents: "loading" }))
         try {
             const json = await fetchJson(ENDPOINTS.globalEvents, {
                 token: authToken,
-                semesterID: semesterID,
-                recordbookID: rId || recordbookID
+                recordbook,
+                semester: semesterID
             }, handleDebugLog)
-            setGlobalEventsData(json)
+            const items = parseEventsData(json)
+            setGlobalEvents(items)
+            writeEventsCache(authToken, recordbook, items)
             setRequest((prev) => ({ ...prev, globalEvents: "success" }))
         } catch {
-            setRequest((prev) => ({ ...prev, globalEvents: "error" }))
+            // Keep the cached list on screen when only the refresh failed.
+            setRequest((prev) => ({ ...prev, globalEvents: cached ? "success" : "error" }))
         }
+    }
+
+    const saveEventsFeed = (input) => {
+        const recordbook = parseRecordbookInput(input)
+        if (!recordbook) return false
+        setStoredRecordbook(token, recordbook)
+        setRecordbookID(recordbook)
+        clearEventsCache(token)
+        setGlobalEvents([])
+        loadGlobalEvents(token, currentSemesterID, { force: true, recordbook })
+        return true
+    }
+
+    const resetEventsFeed = () => {
+        clearStoredRecordbook(token)
+        clearEventsCache(token)
+        setRecordbookID("")
+        setGlobalEvents([])
+        setRequest((prev) => ({ ...prev, globalEvents: "needs_setup" }))
     }
 
     const loadIndex = async (authToken, semesterID, options = {}) => {
@@ -113,12 +164,10 @@ export default function App() {
             }, handleDebugLog)
             const response = json?.response || {}
             const nextDisciplines = Array.isArray(response.Disciplines) ? response.Disciplines : []
-            const rId = response.RecordbookID || response.RecordBook || response.Student?.RecordbookID || response.Student?.RecordBook || response.Student?.ID || ""
 
             setDisciplines(nextDisciplines)
             setMarks(response.Marks || {})
             setTeachersMap(response.Teachers || {})
-            setRecordbookID(String(rId))
 
             setSelectedDisciplineID((prev) => {
                 if (!prev) return ""
@@ -130,12 +179,10 @@ export default function App() {
             setLastMainLoadError("")
             writeCache(authToken, {
                 semesterID: String(semesterID),
-                recordbookID: String(rId),
                 disciplines: nextDisciplines,
                 marks: response.Marks || {},
                 teachersMap: response.Teachers || {}
             }, remember)
-            return String(rId)
         } catch (error) {
             setRequest((prev) => ({ ...prev, index: silent ? prev.index : "error" }))
             setLastMainLoadError(error.message)
@@ -158,10 +205,11 @@ export default function App() {
         setRequest((prev) => ({ ...prev, detail: "loading" }))
 
         try {
-            const [journalResult, subjectResult, eventsResult] = await Promise.all([
+            // The global history feed is loaded lazily by the "История событий"
+            // section, so opening a discipline costs exactly two requests.
+            const [journalResult, subjectResult] = await Promise.all([
                 fetchJson(ENDPOINTS.journal, { token, id: nextID }, handleDebugLog).catch(() => null),
-                fetchJson(ENDPOINTS.subject, { token, id: nextID }, handleDebugLog).catch(() => null),
-                fetchJson(ENDPOINTS.events, { token, id: nextID, semesterID: currentSemesterID, recordbookID }, handleDebugLog).catch(() => null)
+                fetchJson(ENDPOINTS.subject, { token, id: nextID }, handleDebugLog).catch(() => null)
             ])
 
             if (requestID !== detailRequestRef.current) return
@@ -173,8 +221,7 @@ export default function App() {
 
             detailCacheRef.current.set(cacheKey, {
                 journal: journalResult,
-                subject: subjectResult,
-                events: eventsResult
+                subject: subjectResult
             })
             setRequest((prev) => ({ ...prev, detail: "success" }))
         } catch {
@@ -191,8 +238,7 @@ export default function App() {
             const list = await loadSemesters(authToken)
             const semesterID = list[0] ? String(list[0].ID) : ""
             setCurrentSemesterID(semesterID)
-            const rId = await loadIndex(authToken, semesterID)
-            loadGlobalEvents(authToken, semesterID, rId)
+            await loadIndex(authToken, semesterID)
             return
         }
 
@@ -205,7 +251,6 @@ export default function App() {
 
         if (listResult.status === "rejected") {
             if (indexResult.status === "rejected") throw listResult.reason
-            loadGlobalEvents(authToken, preferredSemesterID, recordbookID)
             return
         }
 
@@ -214,15 +259,13 @@ export default function App() {
         // A brand new semester appeared upstream — swap quietly instead of flashing a loader.
         if (newestSemesterID && newestSemesterID !== preferredSemesterID) {
             setSelectedDisciplineID("")
-            const rId = await loadIndex(authToken, newestSemesterID, { silent: true })
+            await loadIndex(authToken, newestSemesterID, { silent: true })
             setCurrentSemesterID(newestSemesterID)
-            loadGlobalEvents(authToken, newestSemesterID, rId)
             return
         }
 
         setCurrentSemesterID(newestSemesterID || preferredSemesterID)
         if (indexResult.status === "rejected") throw indexResult.reason
-        loadGlobalEvents(authToken, newestSemesterID || preferredSemesterID, recordbookID)
     }
 
     const resetDashboardData = () => {
@@ -234,7 +277,7 @@ export default function App() {
         setMarks({})
         setTeachersMap({})
         setSelectedDisciplineID("")
-        setGlobalEventsData(null)
+        setGlobalEvents([])
         setLastMainLoadError("")
         setRequest(INITIAL_REQUEST)
     }
@@ -246,6 +289,8 @@ export default function App() {
         if (!silent) setIsLoggingIn(true)
         setToken(authToken)
         setRemember(rememberFlag)
+        // The history feed id belongs to the account, so it follows the token.
+        setRecordbookID(getStoredRecordbook(authToken))
         if (!isAuto) {
             setLoginStatus({ message: "Проверка токена...", type: "" })
         }
@@ -312,8 +357,12 @@ export default function App() {
 
     const handleRefresh = async () => {
         try {
-            const rId = await loadIndex(token, currentSemesterID)
-            await loadGlobalEvents(token, currentSemesterID, rId)
+            await loadIndex(token, currentSemesterID)
+            // The feed is refreshed only when the section is open: another
+            // upstream request nobody asked for is wasted load.
+            if (mainNav === "events" && recordbookID) {
+                await loadGlobalEvents(token, currentSemesterID, { force: true })
+            }
             if (selectedDisciplineID) {
                 await selectDiscipline(selectedDisciplineID, { forceReload: true })
             }
@@ -329,8 +378,7 @@ export default function App() {
         setCurrentSemesterID(semesterID)
         setSelectedDisciplineID("")
         try {
-            const rId = await loadIndex(token, semesterID)
-            await loadGlobalEvents(token, semesterID, rId)
+            await loadIndex(token, semesterID)
         } catch {
             return
         }
@@ -398,6 +446,15 @@ export default function App() {
         return () => window.clearTimeout(timer)
     }, [startupSuccess])
 
+    useEffect(() => {
+        // The history feed is fetched only when its section is opened, and only
+        // once per cache window. Startup never touches it.
+        if (view !== "dashboard" || mainNav !== "events") return
+        if (request.globalEvents !== "idle") return
+        loadGlobalEvents(token, currentSemesterID)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [view, mainNav, request.globalEvents, token, currentSemesterID, recordbookID])
+
     const mergedTeachers = useMemo(() => {
         if (!selectedDiscipline) return []
         const fromJournal = Array.isArray(detail.journal?.response?.Teachers) ? detail.journal.response.Teachers : []
@@ -421,7 +478,7 @@ export default function App() {
     if (!authReady) {
         return (
             <main className={`startup-loader ${startupSuccess ? "startup-loader--success" : ""}`.trim()} aria-live="polite" aria-busy={!startupSuccess}>
-                <img className="startup-loader-logo" src="/sfedu.svg" alt="Южный федеральный университет" />
+                <img className="startup-loader-logo" src="/app-icon-mark.svg" alt="SuperBRS" />
                 <StartupIndicator success={startupSuccess} />
                 <p>{startupSuccess ? "Вы вошли" : "Выполняется вход..."}</p>
                 <small>{startupSuccess ? "Всё готово" : "Проверяем сохранённый токен"}</small>
@@ -466,7 +523,10 @@ export default function App() {
                 selectedDiscipline={selectedDiscipline}
                 selectDiscipline={selectDiscipline}
                 detail={detail}
-                globalEventsData={globalEventsData}
+                globalEvents={globalEvents}
+                recordbookID={recordbookID}
+                saveEventsFeed={saveEventsFeed}
+                resetEventsFeed={resetEventsFeed}
                 request={request}
                 lastMainLoadError={lastMainLoadError}
                 loadIndex={loadIndex}

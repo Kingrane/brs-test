@@ -9,8 +9,8 @@
  *   /api/*             — не перехватываем вообще (оценки не кэшируются).
  */
 
-const STATIC_CACHE = "superbrs-static-v1";
-const SHELL_CACHE = "superbrs-shell-v1";
+const STATIC_CACHE = "superbrs-static-v2";
+const SHELL_CACHE = "superbrs-shell-v2";
 const SHELL_URL = "/";
 
 const STATIC_PATH = /^\/(assets|fonts|icons)\//;

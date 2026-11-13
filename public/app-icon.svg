@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="icon-plate" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#27272a"/>
+      <stop offset="1" stop-color="#0b0b0e"/>
+    </linearGradient>
+
+    <linearGradient id="icon-ray" gradientUnits="userSpaceOnUse" x1="0" y1="392" x2="0" y2="200">
+      <stop offset="0" stop-color="#e02f1d"/>
+      <stop offset="1" stop-color="#ff7a45"/>
+    </linearGradient>
+
+    <!-- скруглённый треугольник -->
+    <mask id="icon-tri" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <polygon points="256,176 136,392 376,392"
+               fill="#fff" stroke="#fff" stroke-width="22" stroke-linejoin="round"/>
+    </mask>
+
+    <!-- лучи из центра основания -->
+    <mask id="icon-rays" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <circle cx="256" cy="392" r="210" fill="none" stroke="#fff" stroke-width="420"
+              pathLength="360" stroke-dasharray="9 9" transform="rotate(13.5 256 392)"/>
+    </mask>
+  </defs>
+
+  <!-- фон -->
+  <rect width="512" height="512" rx="116" fill="url(#icon-plate)"/>
+  <rect x="2" y="2" width="508" height="508" rx="114" fill="none" stroke="#fff" stroke-opacity=".12" stroke-width="4"/>
+
+  <!-- белый треугольник -->
+  <polygon points="256,176 136,392 376,392"
+           fill="#fff" stroke="#fff" stroke-width="22" stroke-linejoin="round"/>
+
+  <!-- лучи + тень от шапочки -->
+  <g mask="url(#icon-tri)">
+    <rect x="100" y="150" width="312" height="260" fill="url(#icon-ray)" mask="url(#icon-rays)"/>
+    <path d="M178 168 L256 204 L334 168 V240 Q256 290 178 240 Z"
+          transform="translate(0 10)" fill="#000" fill-opacity=".16"/>
+  </g>
+
+  <!-- основание -->
+  <rect x="136" y="414" width="240" height="11" rx="5.5" fill="#fff"/>
+
+  <!-- академическая шапочка -->
+  <g stroke-linejoin="round">
+    <!-- кисточка -->
+    <path d="M392 150 V236" stroke="#ff5a00" stroke-width="8" stroke-linecap="round"/>
+    <rect x="380" y="230" width="24" height="42" rx="10" fill="#ff5a00"/>
+    <!-- тулья -->
+    <path d="M178 168 L256 204 L334 168 V240 Q256 290 178 240 Z" fill="#d4d4d8"/>
+    <!-- квадратная плоскость -->
+    <polygon points="256,84 414,150 256,216 98,150" fill="#fff" stroke="#fff" stroke-width="10"/>
+    <!-- пуговица -->
+    <circle cx="256" cy="150" r="9" fill="#ff5a00"/>
+  </g>
+</svg>

@@ -103,95 +103,96 @@ export function getIndexTeachersForDiscipline(teachersMap, disciplineID) {
     return []
 }
 
+function textOf(value) {
+    if (value === undefined || value === null) return ''
+    if (typeof value === 'object') return String(value['#text'] ?? value['@_text'] ?? '')
+    return String(value)
+}
+
 /**
- * Normalizes RSS 2.0 / XML-parsed JSON from /api/v0/events into array of event items.
+ * "2026-11-12 14:37:27.051645" -> "12.11.2026 14:37:27".
+ * The upstream fraction has six digits, which `new Date()` refuses to parse.
+ */
+export function formatEventDate(raw) {
+    const value = textOf(raw).trim()
+    if (!value) return '-'
+
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/)
+    if (match) {
+        const [, year, month, day, hours, minutes, seconds] = match
+        return `${day}.${month}.${year} ${hours}:${minutes}${seconds ? `:${seconds}` : ''}`
+    }
+
+    const parsed = new Date(value)
+    if (Number.isNaN(parsed.getTime())) return value
+    return `${parsed.toLocaleDateString('ru-RU')} ${parsed.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`
+}
+
+// The v0 feed packs every detail into one HTML-ish <description>.
+const EVENT_DESCRIPTION_FIELDS = [
+    ['discipline', /Предмет:\s*([^<]+)/i],
+    ['value', /Отметка:\s*([^<]+)/i],
+    ['section', /Модуль:\s*([^<]+)/i],
+    ['subsection', /Мероприятие:\s*([^<]+)/i],
+    ['teacher', /Преподаватель:\s*([^<]+)/i]
+]
+
+function parseEventDescription(description) {
+    const fields = {}
+    const value = textOf(description)
+    if (!value) return fields
+    EVENT_DESCRIPTION_FIELDS.forEach(([key, pattern]) => {
+        const match = value.match(pattern)
+        if (match) fields[key] = match[1].trim()
+    })
+    return fields
+}
+
+function pickEventList(json) {
+    if (!json) return null
+    if (json.rss?.channel?.item) return json.rss.channel.item
+    if (json.channel?.item) return json.channel.item
+    if (Array.isArray(json)) return json
+    if (Array.isArray(json.response)) return json.response
+    if (json.response?.events?.event) return json.response.events.event
+    if (json.events?.event) return json.events.event
+    if (json.Events?.Event) return json.Events.Event
+    if (json.response?.Event) return json.response.Event
+    if (typeof json === 'object' && (json.title || json.pubDate || json.Event)) return [json]
+    return null
+}
+
+/**
+ * Normalizes the RSS 2.0 feed from /api/v0/events into an array of event items.
  */
 export function parseEventsData(json) {
-    if (!json) return []
+    const rawList = pickEventList(json)
+    if (!rawList) return []
 
-    let rawList = null
+    const list = Array.isArray(rawList) ? rawList : [rawList]
 
-    if (json.rss?.channel?.item) {
-        rawList = json.rss.channel.item
-    } else if (json.channel?.item) {
-        rawList = json.channel.item
-    } else if (Array.isArray(json)) {
-        rawList = json
-    } else if (Array.isArray(json.response)) {
-        rawList = json.response
-    } else if (json.response?.events?.event) {
-        rawList = json.response.events.event
-    } else if (json.events?.event) {
-        rawList = json.events.event
-    } else if (json.Events?.Event) {
-        rawList = json.Events.Event
-    } else if (json.response?.Event) {
-        rawList = json.response.Event
-    } else if (typeof json === 'object') {
-        for (const key of Object.keys(json)) {
-            if (Array.isArray(json[key])) {
-                rawList = json[key]
-                break
-            } else if (typeof json[key] === 'object' && json[key] !== null) {
-                for (const subKey of Object.keys(json[key])) {
-                    if (Array.isArray(json[key][subKey])) {
-                        rawList = json[key][subKey]
-                        break
-                    }
-                }
-            }
-        }
-    }
+    return list.map((item, idx) => {
+        const rawDate = item.published || item.updated || item.pubDate || item.PubDate || item.Date || item.date || item['@_date']
+        const date = formatEventDate(rawDate)
+        const description = parseEventDescription(item.description || item.Description)
 
-    if (!rawList) {
-        if (typeof json === 'object' && !Array.isArray(json) && (json.title || json.pubDate || json.Event)) {
-            rawList = [json]
-        } else {
-            return []
-        }
-    }
-
-    if (!Array.isArray(rawList)) {
-        rawList = [rawList]
-    }
-
-    return rawList.map((item, idx) => {
-        const rawDate = item.pubDate || item.PubDate || item.Date || item.date || item.EventDate || item['@_date'] || item.CreatedDate || item.Timestamp
-        let dateFormatted = '-'
-        if (rawDate) {
-            const parsed = new Date(rawDate)
-            dateFormatted = !isNaN(parsed.getTime())
-                ? parsed.toLocaleDateString('ru-RU') + ' ' + parsed.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-                : String(rawDate)
-        }
-
-        const eventName = item.title || item.Title || item.Event || item.event || item.Action || item.EventName || item['@_title'] || item['@_event'] || item.Description || 'выставлены баллы'
-        const teacher = item.author || item.Author || item.teacher || item.Teacher || item.TeacherName || item['@_teacher'] || item['@_author'] || '-'
-        const discipline = item.category || item.Category || item.discipline || item.Discipline || item.subject || item.Subject || item.SubjectName || item['@_subject'] || '-'
-        
-        let value = item.value ?? item.Value ?? item.score ?? item.Score ?? item.rate ?? item.Rate ?? item.mark ?? item.Mark ?? item['@_value'] ?? item['@_score'] ?? '-'
-        let section = item.section || item.Section || item.module || item.Module || item.ModuleTitle || item['@_module'] || item['@_section'] || '-'
-        let subsection = item.subsection || item.Subsection || item.submodule || item.Submodule || item.SubmoduleTitle || item['@_submodule'] || item['@_subsection'] || '-'
-
-        // Extract section/subsection/value from RSS description string if available (e.g., "Раздел: ...; Подраздел: ...; Значение: 45")
-        const descStr = String(item.description || item.Description || '')
-        if (descStr) {
-            const sectionMatch = descStr.match(/Раздел:\s*([^;]+)/i)
-            if (sectionMatch && section === '-') section = sectionMatch[1].trim()
-
-            const subsectionMatch = descStr.match(/Подраздел:\s*([^;]+)/i)
-            if (subsectionMatch && subsection === '-') subsection = subsectionMatch[1].trim()
-
-            const valueMatch = descStr.match(/(?:Значение|Балл|Оценка):\s*([^;]+)/i)
-            if (valueMatch && value === '-') value = valueMatch[1].trim()
-        }
+        const eventName = textOf(item.title || item.Title || item.Event || item.event || item.Action) || 'событие'
+        const teacher = description.teacher
+            || textOf(item.author || item.Author || item.teacher || item.Teacher || item.TeacherName)
+            || '-'
+        const discipline = description.discipline
+            || textOf(item.category || item.Category || item.discipline || item.Discipline || item.subject || item.Subject)
+            || '-'
+        const value = description.value ?? item.value ?? item.Value ?? item.score ?? item.Score ?? item.mark ?? item.Mark ?? '-'
+        const section = description.section ?? item.section ?? item.Section ?? item.module ?? item.Module ?? '-'
+        const subsection = description.subsection ?? item.subsection ?? item.Subsection ?? item.submodule ?? item.Submodule ?? '-'
 
         return {
-            id: item.guid || item.id || item.ID || item['@_id'] || `${idx}-${dateFormatted}`,
-            date: dateFormatted,
-            event: typeof eventName === 'object' ? (eventName['#text'] || JSON.stringify(eventName)) : String(eventName),
-            teacher: typeof teacher === 'object' ? formatTeacherShortName(teacher) : String(teacher),
-            discipline: typeof discipline === 'object' ? (discipline.SubjectName || discipline.Name || discipline['#text'] || JSON.stringify(discipline)) : String(discipline),
+            id: textOf(item.id || item.guid || item.ID) || `${idx}-${date}`,
+            date,
+            event: eventName,
+            teacher,
+            discipline,
             value: String(value),
             section: String(section),
             subsection: String(subsection)

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Версия для светлого фона: без плашки, контур вместо неё.
+       Углы треугольника скруглены, контур мягкий. -->
+  <defs>
+    <linearGradient id="mark-ray" gradientUnits="userSpaceOnUse" x1="0" y1="392" x2="0" y2="200">
+      <stop offset="0" stop-color="#e02f1d"/>
+      <stop offset="1" stop-color="#ff7a45"/>
+    </linearGradient>
+
+    <!-- лучи из центра основания -->
+    <mask id="mark-rays" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512">
+      <circle cx="256" cy="392" r="210" fill="none" stroke="#fff" stroke-width="420"
+              pathLength="360" stroke-dasharray="9 9" transform="rotate(13.5 256 392)"/>
+    </mask>
+
+    <clipPath id="mark-triangle">
+      <path d="M239.49 205.72 Q256 176 272.51 205.72 L359.49 362.28 Q376 392 342 392 L170 392 Q136 392 152.51 362.28 Z"/>
+    </clipPath>
+  </defs>
+
+  <!-- лучи внутри треугольника -->
+  <rect x="100" y="150" width="312" height="260" fill="url(#mark-ray)" mask="url(#mark-rays)" clip-path="url(#mark-triangle)"/>
+
+  <!-- контур треугольника поверх лучей -->
+  <path d="M239.49 205.72 Q256 176 272.51 205.72 L359.49 362.28 Q376 392 342 392 L170 392 Q136 392 152.51 362.28 Z"
+        fill="none" stroke="#18181b" stroke-width="12" stroke-linejoin="round"/>
+
+  <!-- основание -->
+  <rect x="136" y="414" width="240" height="11" rx="5.5" fill="#18181b"/>
+
+  <!-- академическая шапочка -->
+  <g stroke-linejoin="round">
+    <!-- кисточка -->
+    <path d="M392 150 V236" stroke="#ff5a00" stroke-width="8" stroke-linecap="round"/>
+    <rect x="380" y="230" width="24" height="42" rx="10" fill="#ff5a00"/>
+    <!-- тулья -->
+    <path d="M178 168 L256 204 L334 168 V240 Q256 290 178 240 Z" fill="#e4e4e7"/>
+    <!-- квадратная плоскость -->
+    <polygon points="256,84 414,150 256,216 98,150" fill="#fff" stroke="#18181b" stroke-width="12"/>
+    <!-- пуговица -->
+    <circle cx="256" cy="150" r="9" fill="#ff5a00"/>
+  </g>
+</svg>

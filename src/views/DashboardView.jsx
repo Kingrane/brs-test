@@ -12,7 +12,9 @@ import TodayCard from "../components/TodayCard"
 import SlidingCapsule from "../components/SlidingCapsule"
 import DropdownSelect from "../components/DropdownSelect"
 import RefreshIcon from "../components/RefreshIcon"
-import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation, parseEventsData } from "../utils/formatters"
+import EventsFeedSetup from "../components/EventsFeedSetup"
+import AgreementDialog from "../components/AgreementDialog"
+import { formatDisciplinePoints, formatDisciplineType, formatSemesterLabel, getGradePresentation } from "../utils/formatters"
 
 const MAIN_NAV = [
     { id: "disciplines", label: "Дисциплины" },
@@ -42,7 +44,10 @@ export default function DashboardView({
     selectedDiscipline,
     selectDiscipline,
     detail,
-    globalEventsData,
+    globalEvents,
+    recordbookID,
+    saveEventsFeed,
+    resetEventsFeed,
     request,
     lastMainLoadError,
     loadIndex,
@@ -55,6 +60,7 @@ export default function DashboardView({
     handleLogout
 }) {
     const [mobileView, setMobileView] = React.useState("list")
+    const [agreementOpen, setAgreementOpen] = React.useState(false)
     const listScrollRef = React.useRef(0)
     const detailHistoryRef = React.useRef(false)
     const [isRefreshing, setIsRefreshing] = React.useState(false)
@@ -152,8 +158,6 @@ export default function DashboardView({
     const panelSub = selectedDiscipline
         ? `${formatDisciplineType(selectedDiscipline.Type)} · ${selectedPoints}`
         : "Выберите дисциплину в списке"
-
-    const parsedGlobalEvents = parseEventsData(globalEventsData)
 
     const renderDisciplines = () => {
         if (request.index === "loading") {
@@ -454,20 +458,40 @@ export default function DashboardView({
                                 <h2 className="panel__title">История событий</h2>
                                 <p className="panel__sub">Изменения оценок и посещаемости по всем дисциплинам</p>
                             </div>
-                            <span className="badge badge--ember">{String(parsedGlobalEvents.length)}</span>
+                            {recordbookID && request.globalEvents === "success" ? (
+                                <span className="badge badge--ember">{String(globalEvents.length)}</span>
+                            ) : null}
                         </div>
                         <div className="panel__body">
-                            {request.globalEvents === "loading" ? (
+                            {!recordbookID ? (
+                                <EventsFeedSetup onSave={saveEventsFeed} />
+                            ) : request.globalEvents === "loading" || request.globalEvents === "idle" ? (
                                 <StateLoading />
                             ) : request.globalEvents === "error" ? (
                                 <StateError
                                     title="Не удалось загрузить историю событий"
-                                    details="Ошибка при запросе /api/v0/events от сервера ЮФУ"
-                                    onRetry={() => loadGlobalEvents(token, currentSemesterID)}
+                                    details="Лента событий ЮФУ не ответила. Проверьте ссылку на ленту или повторите запрос."
+                                    onRetry={() => loadGlobalEvents(token, currentSemesterID, { force: true })}
                                 />
                             ) : (
-                                <EventsTable events={parsedGlobalEvents} />
+                                <EventsTable events={globalEvents} />
                             )}
+                        </div>
+                        <div className="events-footnote">
+                            {recordbookID ? (
+                                <p>
+                                    История обновляется при открытии раздела и по кнопке «Обновить» — не чаще одного
+                                    запроса в 10 минут.{" "}
+                                    <button className="linklike" type="button" onClick={resetEventsFeed}>
+                                        Сменить ссылку на ленту
+                                    </button>
+                                </p>
+                            ) : null}
+                            <p>
+                                <button className="linklike" type="button" onClick={() => setAgreementOpen(true)}>
+                                    Пользовательское соглашение
+                                </button>
+                            </p>
                         </div>
                     </section>
                 </main>
@@ -478,8 +502,15 @@ export default function DashboardView({
                     <summary>Debug API</summary>
                     <pre>{JSON.stringify(debugLog, null, 2)}</pre>
                 </details>
-                <p className="footer-credit">romka навайбкодил</p>
+                <div className="footer-meta">
+                    <p className="footer-credit">romka навайбкодил</p>
+                    <button className="linklike" type="button" onClick={() => setAgreementOpen(true)}>
+                        Пользовательское соглашение
+                    </button>
+                </div>
             </div>
+
+            <AgreementDialog open={agreementOpen} onClose={() => setAgreementOpen(false)} />
         </section>
     )
 }
